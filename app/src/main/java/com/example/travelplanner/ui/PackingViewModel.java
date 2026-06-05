@@ -42,9 +42,11 @@ public class PackingViewModel extends ViewModel {
             @Override
             public void onSuccess(@NonNull List<PackingItem> items,
                                   @androidx.annotation.Nullable String imageUrl,
-                                  @NonNull String city) {
+                                  @NonNull String city,
+                                  double lat,
+                                  double lon) {
                 // The callback may run on a worker thread; post to main.
-                state.postValue(PackingState.success(items, imageUrl, city));
+                state.postValue(PackingState.success(items, imageUrl, city, lat, lon));
             }
 
             @Override
@@ -64,7 +66,7 @@ public class PackingViewModel extends ViewModel {
         item.setPacked(!item.isPacked());
 
         // Rebuild a new state so observers receive a new immutable object.
-        state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName));
+        state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon));
     }
 
     @Override

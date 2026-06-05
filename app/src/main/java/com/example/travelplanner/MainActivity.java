@@ -9,6 +9,9 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -54,6 +57,8 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvProgress;
     private ProgressBar progressBar;
     private RecyclerView rvPacking;
+    private WebView webViewMap;
+    private MaterialButton btnMap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +77,9 @@ public class MainActivity extends AppCompatActivity {
         setupRecycler();
         setupClickListeners();
         observeViewModel();
+
+        // Default map view (e.g., London)
+        setupWebView(51.505, -0.09);
     }
 
     private void bindViews() {
@@ -81,6 +89,8 @@ public class MainActivity extends AppCompatActivity {
         tvProgress = findViewById(R.id.tvProgress);
         progressBar = findViewById(R.id.progressBar);
         rvPacking  = findViewById(R.id.rvPacking);
+        webViewMap = findViewById(R.id.webViewMap);
+        btnMap     = findViewById(R.id.btnMap);
     }
 
     private void setupRecycler() {
@@ -102,6 +112,16 @@ public class MainActivity extends AppCompatActivity {
             }
             hideKeyboard();
             viewModel.generatePackingList(city);
+        });
+
+        btnMap.setOnClickListener(v -> {
+            if (webViewMap.getVisibility() == View.VISIBLE) {
+                webViewMap.setVisibility(View.GONE);
+                btnMap.setText("Show Map");
+            } else {
+                webViewMap.setVisibility(View.VISIBLE);
+                btnMap.setText("Hide Map");
+            }
         });
     }
 
@@ -145,6 +165,59 @@ public class MainActivity extends AppCompatActivity {
                 if (item.isPacked()) packed++;
             }
             tvProgress.setText(packed + " / " + items.size() + " packed");
+        }
+
+        if (state.lat != 0 || state.lon != 0) {
+            btnMap.setVisibility(View.VISIBLE);
+            webViewMap.setVisibility(View.VISIBLE);
+            setupWebView(state.lat, state.lon);
+        } else {
+            btnMap.setVisibility(View.GONE);
+        }
+    }
+
+    private void setupWebView(double lat, double lon) {
+        webViewMap.getSettings().setJavaScriptEnabled(true);
+        webViewMap.setWebViewClient(new WebViewClient());
+        webViewMap.addJavascriptInterface(new WebAppInterface(), "Android");
+        
+        String html = "<html><head>" +
+                "<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\" />" +
+                "<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></script>" +
+                "<style>#map { height: 100%; width: 100%; margin: 0; padding: 0; }</style>" +
+                "</head><body style=\"margin: 0; padding: 0;\">" +
+                "<div id=\"map\"></div>" +
+                "<script>" +
+                "var map = L.map('map').setView([" + lat + ", " + lon + "], 13);" +
+                "L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {" +
+                "    attribution: '&copy; OpenStreetMap contributors'" +
+                "}).addTo(map);" +
+                "var marker = L.marker([" + lat + ", " + lon + "]).addTo(map);" +
+                "map.on('click', function(e) {" +
+                "  var coord = e.latlng;" +
+                "  var lat = coord.lat;" +
+                "  var lng = coord.lng;" +
+                "  marker.setLatLng(coord);" +
+                "  fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=10')" +
+                "    .then(response => response.json())" +
+                "    .then(data => {" +
+                "      var city = data.address.city || data.address.town || data.address.village || data.address.state || 'Unknown';" +
+                "      Android.onCitySelected(city);" +
+                "    });" +
+                "});" +
+                "</script></body></html>";
+        webViewMap.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null);
+    }
+
+    private class WebAppInterface {
+        @JavascriptInterface
+        public void onCitySelected(String cityName) {
+            runOnUiThread(() -> {
+                etCity.setText(cityName);
+                Toast.makeText(MainActivity.this, "Selected: " + cityName, Toast.LENGTH_SHORT).show();
+                // Add a small delay to let the UI settle before starting a new search
+                etCity.postDelayed(() -> viewModel.generatePackingList(cityName), 300);
+            });
         }
     }
 

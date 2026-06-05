@@ -14,30 +14,38 @@ public class PackingState {
     public final String imageUrl;
     public final String errorMessage;   // null when no error
     public final String cityName;       // last searched city (for context in UI)
+    public final double lat;
+    public final double lon;
 
     private PackingState(boolean loading,
                          List<PackingItem> items,
                          String imageUrl,
                          String errorMessage,
-                         String cityName) {
+                         String cityName,
+                         double lat,
+                         double lon) {
         this.loading = loading;
         this.items = items == null ? Collections.emptyList() : items;
         this.imageUrl = imageUrl;
         this.errorMessage = errorMessage;
         this.cityName = cityName;
+        this.lat = lat;
+        this.lon = lon;
     }
 
     public static PackingState loading() {
-        return new PackingState(true, null, null, null, null);
+        return new PackingState(true, null, null, null, null, 0, 0);
     }
 
     public static PackingState success(List<PackingItem> items,
                                       String imageUrl,
-                                      String cityName) {
-        return new PackingState(false, items, imageUrl, null, cityName);
+                                      String cityName,
+                                      double lat,
+                                      double lon) {
+        return new PackingState(false, items, imageUrl, null, cityName, lat, lon);
     }
 
     public static PackingState error(String message) {
-        return new PackingState(false, Collections.emptyList(), null, message, null);
+        return new PackingState(false, Collections.emptyList(), null, message, null, 0, 0);
     }
 }

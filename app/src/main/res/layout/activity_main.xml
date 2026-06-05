@@ -50,45 +50,69 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@id/searchInputLayout" />
 
-    <!-- ============ City header image ============ -->
-    <ImageView
-        android:id="@+id/ivCityHeader"
-        android:layout_width="0dp"
-        android:layout_height="180dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginEnd="16dp"
-        android:background="#E0E0E0"
-        android:contentDescription="City photo"
-        android:scaleType="centerCrop"
-        android:src="@android:drawable/ic_menu_gallery"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/searchInputLayout" />
-
     <!-- Progress label -->
     <TextView
         android:id="@+id/tvProgress"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
         android:text="0 / 0 packed"
         android:textColor="#212121"
-        android:textSize="16sp"
+        android:textSize="14sp"
         android:textStyle="bold"
+        app:layout_constraintEnd_toStartOf="@id/btnMap"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/searchInputLayout" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnMap"
+        style="@style/Widget.MaterialComponents.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:text="Hide Map"
+        android:visibility="visible"
+        app:layout_constraintBottom_toBottomOf="@id/tvProgress"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/tvProgress" />
+
+    <android.webkit.WebView
+        android:id="@+id/webViewMap"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="4dp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@id/ivCityHeader"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/ivCityHeader" />
+        app:layout_constraintTop_toBottomOf="@id/tvProgress" />
+
+    <!-- ============ City header image ============ -->
+    <ImageView
+        android:id="@+id/ivCityHeader"
+        android:layout_width="0dp"
+        android:layout_height="100dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="16dp"
+        android:background="#E0E0E0"
+        android:contentDescription="City photo"
+        android:scaleType="centerCrop"
+        android:src="@android:drawable/ic_menu_gallery"
+        app:layout_constraintBottom_toTopOf="@id/rvPacking"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/webViewMap" />
 
     <!-- ============ Packing list ============ -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvPacking"
         android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_height="200dp"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="4dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="8dp"
         android:clipToPadding="false"
@@ -96,7 +120,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/tvProgress" />
+        app:layout_constraintTop_toBottomOf="@id/ivCityHeader" />
 
     <!-- Loading spinner -->
     <ProgressBar

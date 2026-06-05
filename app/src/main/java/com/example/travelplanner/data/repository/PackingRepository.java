@@ -38,7 +38,7 @@ public class PackingRepository {
             // ---------- Step 1: Geocoding ----------
             Call<List<GeocodingResponse>> geoCall =
                     RetrofitClient.geocoding()
-                            .searchCity(cityName, "json", 1);
+                            .searchCity(cityName, "jsonv2", 1);
             Response<List<GeocodingResponse>> geoResp = geoCall.execute();
             if (!geoResp.isSuccessful() || geoResp.body() == null || geoResp.body().isEmpty()) {
                 callback.onError("City not found: " + cityName);
@@ -64,7 +64,7 @@ public class PackingRepository {
                     return;
                 }
                 List<PackingItem> items = buildList(weatherBox[0], countryBox[0]);
-                callback.onSuccess(items, imageBox[0], cityName);
+                callback.onSuccess(items, imageBox[0], cityName, lat, lon);
             };
 
             // a) Weather
@@ -87,6 +87,10 @@ public class PackingRepository {
 
             // b) Country
             new Thread(() -> {
+                if (countryCode == null || countryCode.isEmpty()) {
+                    onEachComplete.run();
+                    return;
+                }
                 try {
                     Response<List<CountryResponse>> c = RetrofitClient.country()
                             .getCountryByCode(countryCode)
@@ -167,7 +171,9 @@ public class PackingRepository {
     public interface Callback {
         void onSuccess(@NonNull List<PackingItem> items,
                        @Nullable String imageUrl,
-                       @NonNull String cityName);
+                       @NonNull String cityName,
+                       double lat,
+                       double lon);
         void onError(@NonNull String message);
     }
 }

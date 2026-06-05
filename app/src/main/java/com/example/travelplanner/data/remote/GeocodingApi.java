@@ -14,10 +14,10 @@ import retrofit2.http.Query;
  */
 public interface GeocodingApi {
 
-    @GET("search")
+    @GET("search.php")
     Call<List<GeocodingResponse>> searchCity(
             @Query("q") String cityName,
-            @Query("format") String format,        // "json"
+            @Query("format") String format,        // "jsonv2"
             @Query("limit") int limit              // usually 1
     );
 }
