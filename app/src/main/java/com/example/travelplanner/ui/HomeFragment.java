@@ -93,19 +93,32 @@ public class HomeFragment extends Fragment {
 
         tvHistoryLabel.setVisibility(View.VISIBLE);
         for (String city : history) {
+            com.google.android.material.card.MaterialCardView card = new com.google.android.material.card.MaterialCardView(getContext());
+            card.setCardElevation(2f);
+            card.setRadius(24f);
+            card.setCardBackgroundColor(getResources().getColor(R.color.card_bg, null));
+            
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            params.setMargins(0, 8, 0, 8);
+            card.setLayoutParams(params);
+
             TextView tv = new TextView(getContext());
             tv.setText(city);
-            tv.setPadding(16, 16, 16, 16);
+            tv.setPadding(32, 24, 32, 24);
             tv.setTextSize(16);
-            tv.setTextColor(getResources().getColor(R.color.black, null));
-            tv.setBackgroundResource(android.R.drawable.list_selector_background);
-            tv.setClickable(true);
-            tv.setFocusable(true);
-            tv.setOnClickListener(v -> {
+            tv.setTextColor(getResources().getColor(R.color.text_primary, null));
+            tv.setCompoundDrawablesWithIntrinsicBounds(android.R.drawable.ic_menu_recent_history, 0, 0, 0);
+            tv.setCompoundDrawablePadding(24);
+            
+            card.addView(tv);
+            card.setClickable(true);
+            card.setFocusable(true);
+            card.setOnClickListener(v -> {
                 etCity.setText(city);
                 viewModel.generatePackingList(city);
             });
-            historyContainer.addView(tv);
+            historyContainer.addView(card);
         }
     }
 

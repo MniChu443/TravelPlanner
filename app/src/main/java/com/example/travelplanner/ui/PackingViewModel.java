@@ -41,12 +41,11 @@ public class PackingViewModel extends ViewModel {
             return;
         }
 
-        // Reset state to loading before each search to allow multiple searches
-        // Important: using postValue if called from other threads, 
-        // but setValue is fine here as it's typically from UI.
+        // 1. Force a clean 'loading' state on the main thread
         state.setValue(PackingState.loading());
 
         io.execute(() -> {
+            // 2. Clear any lingering interruptions
             repository.buildPackingList(cityName.trim(), new PackingRepository.Callback() {
                 @Override
                 public void onSuccess(@NonNull List<PackingItem> items,
@@ -54,20 +53,16 @@ public class PackingViewModel extends ViewModel {
                                       @NonNull String city,
                                       double lat,
                                       double lon) {
-                    // Update history
+                    
+                    // 3. Post history update separately
                     List<String> currentHistory = searchHistory.getValue();
-                    if (currentHistory != null) {
-                        // Create a new list to ensure observers see the change if they check identity
-                        List<String> newHistory = new java.util.ArrayList<>(currentHistory);
-                        newHistory.remove(city);
-                        newHistory.add(0, city);
-                        if (newHistory.size() > 5) {
-                            newHistory.remove(5);
-                        }
-                        searchHistory.postValue(newHistory);
-                    }
+                    List<String> newHistory = (currentHistory == null) ? new java.util.ArrayList<>() : new java.util.ArrayList<>(currentHistory);
+                    newHistory.remove(city);
+                    newHistory.add(0, city);
+                    if (newHistory.size() > 5) newHistory.remove(5);
+                    searchHistory.postValue(newHistory);
 
-                    // The callback may run on a worker thread; post to main.
+                    // 4. Success - using postValue for thread safety
                     state.postValue(PackingState.success(items, imageUrl, city, lat, lon));
                 }
 
