@@ -1,3 +1,14 @@
 <resources>
-    <string name="app_name">TravelPlanner</string>
+    <string name="app_name">Asystent Pakowania</string>
+    <string name="hint_enter_city">Wpisz miasto (np. Paryż)</string>
+    <string name="btn_go">Idź</string>
+    <string name="btn_show_map">Pokaż mapę</string>
+    <string name="btn_hide_map">Ukryj mapę</string>
+    <string name="packed_status">%1$d / %2$d spakowane</string>
+    <string name="hint_add_item">Dodaj własny przedmiot...</string>
+    <string name="error_city_empty">Wpisz najpierw nazwę miasta</string>
+    <string name="city_not_found">Nie znaleziono miasta: %1$s</string>
+    <string name="loading">Ładowanie...</string>
+    <string name="selected_city">Wybrano: %1$s</string>
+    <string name="city_image_description">Zdjęcie miasta</string>
 </resources>

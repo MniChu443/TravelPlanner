@@ -24,9 +24,14 @@ public class PackingViewModel extends ViewModel {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
     private final MutableLiveData<PackingState> state = new MutableLiveData<>();
+    private final MutableLiveData<List<String>> searchHistory = new MutableLiveData<>(new java.util.ArrayList<>());
 
     public LiveData<PackingState> getState() {
         return state;
+    }
+
+    public LiveData<List<String>> getSearchHistory() {
+        return searchHistory;
     }
 
     /** Triggered when the user taps the "Search & Generate" button. */
@@ -36,24 +41,42 @@ public class PackingViewModel extends ViewModel {
             return;
         }
 
+        // Reset state to loading before each search to allow multiple searches
+        // Important: using postValue if called from other threads, 
+        // but setValue is fine here as it's typically from UI.
         state.setValue(PackingState.loading());
 
-        io.execute(() -> repository.buildPackingList(cityName.trim(), new PackingRepository.Callback() {
-            @Override
-            public void onSuccess(@NonNull List<PackingItem> items,
-                                  @androidx.annotation.Nullable String imageUrl,
-                                  @NonNull String city,
-                                  double lat,
-                                  double lon) {
-                // The callback may run on a worker thread; post to main.
-                state.postValue(PackingState.success(items, imageUrl, city, lat, lon));
-            }
+        io.execute(() -> {
+            repository.buildPackingList(cityName.trim(), new PackingRepository.Callback() {
+                @Override
+                public void onSuccess(@NonNull List<PackingItem> items,
+                                      @androidx.annotation.Nullable String imageUrl,
+                                      @NonNull String city,
+                                      double lat,
+                                      double lon) {
+                    // Update history
+                    List<String> currentHistory = searchHistory.getValue();
+                    if (currentHistory != null) {
+                        // Create a new list to ensure observers see the change if they check identity
+                        List<String> newHistory = new java.util.ArrayList<>(currentHistory);
+                        newHistory.remove(city);
+                        newHistory.add(0, city);
+                        if (newHistory.size() > 5) {
+                            newHistory.remove(5);
+                        }
+                        searchHistory.postValue(newHistory);
+                    }
 
-            @Override
-            public void onError(@NonNull String message) {
-                state.postValue(PackingState.error(message));
-            }
-        }));
+                    // The callback may run on a worker thread; post to main.
+                    state.postValue(PackingState.success(items, imageUrl, city, lat, lon));
+                }
+
+                @Override
+                public void onError(@NonNull String message) {
+                    state.postValue(PackingState.error(message));
+                }
+            });
+        });
     }
 
     /** Toggle one item's `packed` flag (used by the RecyclerView checkbox). */
@@ -67,6 +90,17 @@ public class PackingViewModel extends ViewModel {
 
         // Rebuild a new state so observers receive a new immutable object.
         state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon));
+    }
+
+    /** Add a custom item to the list. */
+    public void addCustomItem(@NonNull String itemName) {
+        PackingState current = state.getValue();
+        if (current == null) return;
+
+        List<PackingItem> newItems = new java.util.ArrayList<>(current.items);
+        newItems.add(0, new PackingItem(itemName));
+
+        state.setValue(PackingState.success(newItems, current.imageUrl, current.cityName, current.lat, current.lon));
     }
 
     @Override

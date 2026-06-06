@@ -54,6 +54,10 @@ dependencies {
     // Glide for image loading
     implementation(libs.glide)
 
+    // Navigation component
+    implementation(libs.navigation.fragment)
+    implementation(libs.navigation.ui)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)
