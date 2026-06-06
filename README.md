@@ -1,4 +1,2 @@
-Usunac/Poprawic wyswwietlanie zdjecia
-Dynamiczna lista predmiotow+ dodanie wlasnych przedmiotow
-Zmienic wszystko na polski jezyk 
-Zmienic API mapy 
+Naprawic ze mozna wyszukac tylko jedno miasto i aplikacja sie zacina
+Poprawic ogolny wyglad aplikacji 
