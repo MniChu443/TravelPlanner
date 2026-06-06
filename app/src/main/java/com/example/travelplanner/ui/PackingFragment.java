@@ -76,7 +76,20 @@ public class PackingFragment extends Fragment {
         });
 
         btnSearchAgain.setOnClickListener(v -> {
-            // Navigate back to Home screen to search for a new city
+            // Reset ViewModel state so HomeFragment doesn't auto-redirect back here
+            viewModel.resetToIdle();
+            
+            // Explicitly select Home tab in BottomNav if it exists
+            if (getActivity() != null) {
+                com.google.android.material.bottomnavigation.BottomNavigationView navView = 
+                    getActivity().findViewById(R.id.nav_view);
+                if (navView != null) {
+                    navView.setSelectedItemId(R.id.navigation_home);
+                    return; // setSelectedItemId usually triggers navigation
+                }
+            }
+
+            // Fallback navigation if BottomNav not found
             androidx.navigation.NavController navController = androidx.navigation.Navigation.findNavController(requireActivity(), R.id.nav_host_fragment);
             navController.navigate(R.id.navigation_home);
         });

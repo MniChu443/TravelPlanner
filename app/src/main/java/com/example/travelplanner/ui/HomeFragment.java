@@ -61,23 +61,29 @@ public class HomeFragment extends Fragment {
 
         viewModel.getState().observe(getViewLifecycleOwner(), state -> {
             if (state == null) return;
+            
+            // Only handle loading spinner here
             progressBar.setVisibility(state.loading ? View.VISIBLE : View.GONE);
             
-            // If we just finished loading and have items, navigate
-            if (!state.loading && state.items != null && !state.items.isEmpty() && state.errorMessage == null) {
-                // Clear input for next search
-                etCity.setText("");
+            // Navigate ONLY if we have items AND it's a fresh success
+            if (!state.loading && state.items != null && !state.items.isEmpty() && state.errorMessage == null && !TextUtils.isEmpty(state.cityName)) {
                 
-                // Only navigate if we are currently in HomeFragment to avoid loops or unexpected jumps
                 androidx.navigation.NavController navController = Navigation.findNavController(root);
                 if (navController.getCurrentDestination() != null && 
                     navController.getCurrentDestination().getId() == R.id.navigation_home) {
+                    
+                    etCity.setText("");
                     navController.navigate(R.id.navigation_packing);
+                    
+                    // REMOVED: root.postDelayed(() -> viewModel.resetToIdle(), 500);
+                    // Instead of resetting to idle here, we will let PackingFragment display the data.
+                    // The 'idle' state should only be set when the user EXPLICITLY wants to search again.
                 }
             }
 
             if (state.errorMessage != null) {
                 Toast.makeText(getContext(), state.errorMessage, Toast.LENGTH_SHORT).show();
+                viewModel.clearError();
             }
         });
 

@@ -42,10 +42,10 @@ public class PackingViewModel extends ViewModel {
         }
 
         // 1. Force a clean 'loading' state on the main thread
+        // We set a special flag or just clear thecityName to indicate this is a NEW search
         state.setValue(PackingState.loading());
 
         io.execute(() -> {
-            // 2. Clear any lingering interruptions
             repository.buildPackingList(cityName.trim(), new PackingRepository.Callback() {
                 @Override
                 public void onSuccess(@NonNull List<PackingItem> items,
@@ -96,6 +96,19 @@ public class PackingViewModel extends ViewModel {
         newItems.add(0, new PackingItem(itemName));
 
         state.setValue(PackingState.success(newItems, current.imageUrl, current.cityName, current.lat, current.lon));
+    }
+
+    /** Clear error message from state. */
+    public void clearError() {
+        PackingState current = state.getValue();
+        if (current != null && current.errorMessage != null) {
+            state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon));
+        }
+    }
+
+    /** Reset state to idle. */
+    public void resetToIdle() {
+        state.setValue(PackingState.idle());
     }
 
     @Override

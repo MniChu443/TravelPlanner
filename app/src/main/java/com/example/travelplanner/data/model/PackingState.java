@@ -48,4 +48,8 @@ public class PackingState {
     public static PackingState error(String message) {
         return new PackingState(false, Collections.emptyList(), null, message, null, 0, 0);
     }
+
+    public static PackingState idle() {
+        return new PackingState(false, null, null, null, null, 0, 0);
+    }
 }
