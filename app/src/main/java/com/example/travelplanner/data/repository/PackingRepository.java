@@ -1,12 +1,17 @@
 package com.example.travelplanner.data.repository;
 
+import android.content.Context;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.example.travelplanner.data.local.AppDatabase;
+import com.example.travelplanner.data.local.PackingDao;
 import com.example.travelplanner.data.model.CountryResponse;
 import com.example.travelplanner.data.model.GeocodingResponse;
 import com.example.travelplanner.data.model.PackingItem;
 import com.example.travelplanner.data.model.PixabayResponse;
+import com.example.travelplanner.data.model.SearchHistory;
 import com.example.travelplanner.data.model.WeatherResponse;
 import com.example.travelplanner.data.remote.RetrofitClient;
 import com.google.gson.JsonArray;
@@ -15,8 +20,10 @@ import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import okhttp3.MediaType;
@@ -28,141 +35,184 @@ import retrofit2.Response;
 /**
  * Single point of contact for the ViewModel.
  * Coordinates the chained calls: Geocoding → (Weather, Country, Image) in parallel.
- *
- * All methods are synchronous-on-purpose: they block on the calling background thread.
- * The ViewModel is responsible for off-loading them off the main thread.
  */
 public class PackingRepository {
 
-    /**
-     * Synchronously resolves a city and returns a result.
-     * The Callback is invoked on the *same* thread that called the method.
-     */
-    public void buildPackingList(@NonNull String cityName,
-                                 @NonNull Callback callback) {
-        try {
-            // ---------- Step 1: Geocoding ----------
-            Call<List<GeocodingResponse>> geoCall =
-                    RetrofitClient.geocoding()
-                            .searchCity(cityName, "jsonv2", 1);
-            Response<List<GeocodingResponse>> geoResp = geoCall.execute();
-            if (!geoResp.isSuccessful() || geoResp.body() == null || geoResp.body().isEmpty()) {
-                callback.onError("City not found: " + cityName);
-                return;
-            }
-            GeocodingResponse geo = geoResp.body().get(0);
-            final double lat = geo.getLatDouble();
-            final double lon = geo.getLonDouble();
-            final String countryCode = geo.getCountryCode();
-            final String fullCityName = geo.getDisplayName(); // Use display_name for full context
+    private final PackingDao packingDao;
+    private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
-            // ---------- Step 2: parallel calls ----------
-            final WeatherResponse[] weatherBox = new WeatherResponse[1];
-            final CountryResponse[] countryBox = new CountryResponse[1];
-            final String[] imageBox = new String[1];
-            final String[] firstError = new String[1];
-            final AtomicInteger remaining = new AtomicInteger(3);
-
-            Runnable onEachComplete = () -> {
-                if (remaining.decrementAndGet() != 0) return;
-
-                if (firstError[0] != null) {
-                    callback.onError(firstError[0]);
-                    return;
-                }
-                
-                // If we have an AI key, we try to get an AI list, otherwise fallback.
-                if (!RetrofitClient.GROQ_API_KEY.equals("YOUR_GROQ_API_KEY_HERE")) {
-                    List<PackingItem> aiItems = getAiPackingList(fullCityName, weatherBox[0], countryBox[0]);
-                    if (aiItems != null && !aiItems.isEmpty()) {
-                        callback.onSuccess(aiItems, imageBox[0], fullCityName, lat, lon);
-                        return;
-                    }
-                }
-
-                List<PackingItem> items = buildList(weatherBox[0], countryBox[0]);
-                callback.onSuccess(items, imageBox[0], fullCityName, lat, lon);
-            };
-
-            // a) Weather
-            new Thread(() -> {
-                try {
-                    Response<WeatherResponse> w = RetrofitClient.weather()
-                            .getCurrentWeather(lat, lon, true)
-                            .execute();
-                    if (w.isSuccessful() && w.body() != null) {
-                        weatherBox[0] = w.body();
-                    } else if (firstError[0] == null) {
-                        firstError[0] = "Weather request failed";
-                    }
-                } catch (IOException e) {
-                    if (firstError[0] == null) firstError[0] = "Weather: " + e.getMessage();
-                } finally {
-                    onEachComplete.run();
-                }
-            }, "weather-call").start();
-
-            // b) Country
-            new Thread(() -> {
-                if (countryCode == null || countryCode.isEmpty()) {
-                    onEachComplete.run();
-                    return;
-                }
-                try {
-                    Response<List<CountryResponse>> c = RetrofitClient.country()
-                            .getCountryByCode(countryCode)
-                            .execute();
-                    if (c.isSuccessful() && c.body() != null && !c.body().isEmpty()) {
-                        countryBox[0] = c.body().get(0);
-                    } else if (firstError[0] == null) {
-                        firstError[0] = "Country request failed";
-                    }
-                } catch (IOException e) {
-                    if (firstError[0] == null) firstError[0] = "Country: " + e.getMessage();
-                } finally {
-                    onEachComplete.run();
-                }
-            }, "country-call").start();
-
-            // c) Image
-            new Thread(() -> {
-                try {
-                    Response<PixabayResponse> p = RetrofitClient.pixabay()
-                            .searchImage(RetrofitClient.PIXABAY_API_KEY,
-                                    cityName, "photo")
-                            .execute();
-                    if (p.isSuccessful()
-                            && p.body() != null
-                            && p.body().getHits() != null
-                            && !p.body().getHits().isEmpty()) {
-                        imageBox[0] = p.body().getHits().get(0).getLargeImageURL();
-                    } // No error: image is optional / has a fallback drawable.
-                } catch (Exception e) {
-                    // Image errors are silent – we just keep the placeholder.
-                } finally {
-                    onEachComplete.run();
-                }
-            }, "image-call").start();
-
-        } catch (IOException e) {
-            callback.onError("Geocoding failed: " + e.getMessage());
-        }
+    public PackingRepository(Context context) {
+        this.packingDao = AppDatabase.getInstance(context).packingDao();
     }
 
     /**
-     * Calls Groq AI to generate a packing list.
+     * Builds a packing list, checking local DB first.
      */
+    public void buildPackingList(@NonNull String cityName, @Nullable String travelDate, @NonNull Callback callback) {
+        executor.execute(() -> {
+            // 1. Check Local DB
+            List<PackingItem> cached = packingDao.getItemsForCity(cityName);
+            
+            // 2. Fetch Geocoding (always needed for coordinates and full city name)
+            try {
+                Call<List<GeocodingResponse>> geoCall =
+                        RetrofitClient.geocoding().searchCity(cityName, "jsonv2", 1, 1, "pl");
+                Response<List<GeocodingResponse>> geoResp = geoCall.execute();
+                
+                if (!geoResp.isSuccessful() || geoResp.body() == null || geoResp.body().isEmpty()) {
+                    callback.onError("City not found: " + cityName);
+                    return;
+                }
+                
+                GeocodingResponse geo = geoResp.body().get(0);
+                final double lat = geo.getLatDouble();
+                final double lon = geo.getLonDouble();
+                final String countryCode = geo.getCountryCode();
+                final String fullCityName = geo.getCityOnly();
+
+                // If cached exists, we use it but still might want to refresh weather for the specific date
+                fetchMetadataAndItems(fullCityName, lat, lon, countryCode, travelDate, cached, callback);
+
+            } catch (IOException e) {
+                callback.onError("Geocoding failed: " + e.getMessage());
+            }
+        });
+    }
+
+    private void fetchMetadataAndSuccess(String cityName, List<PackingItem> items, Callback callback) {
+        // Implementation for fetching just metadata (image, lat, lon) if items are cached
+        // For now, let's keep it simple and just return items if cached, assuming caller handles UI.
+        // In a real app, we'd store cityName, image, lat, lon in a separate 'Trip' entity.
+        callback.onSuccess(items, null, cityName, 0, 0);
+    }
+
+    private void fetchMetadataAndItems(String fullCityName, double lat, double lon, String countryCode, String travelDate, List<PackingItem> cached, Callback callback) {
+        final WeatherResponse[] weatherBox = new WeatherResponse[1];
+        final CountryResponse[] countryBox = new CountryResponse[1];
+        final String[] imageBox = new String[1];
+        final String[] firstError = new String[1];
+        final AtomicInteger remaining = new AtomicInteger(3);
+
+        Runnable onEachComplete = () -> {
+            if (remaining.decrementAndGet() != 0) return;
+
+            if (firstError[0] != null) {
+                callback.onError(firstError[0]);
+                return;
+            }
+
+            List<PackingItem> items;
+            if (cached != null && !cached.isEmpty()) {
+                items = cached;
+            } else {
+                items = null;
+                String apiKey = RetrofitClient.GROQ_API_KEY;
+                if (apiKey != null && !apiKey.isEmpty() && !apiKey.startsWith("YOUR_")) {
+                    items = getAiPackingList(fullCityName, weatherBox[0], countryBox[0]);
+                }
+                
+                if (items == null || items.isEmpty()) {
+                    items = buildList(weatherBox[0], countryBox[0]);
+                }
+
+                // Save new items to Local DB
+                for (PackingItem item : items) {
+                    item.setCityName(fullCityName);
+                }
+                packingDao.insertAll(items);
+            }
+
+            callback.onSuccess(items, imageBox[0], fullCityName, lat, lon);
+        };
+
+        executor.execute(() -> fetchWeather(lat, lon, travelDate, weatherBox, firstError, onEachComplete));
+        executor.execute(() -> fetchCountry(countryCode, countryBox, onEachComplete));
+        executor.execute(() -> fetchImage(fullCityName, imageBox, onEachComplete));
+    }
+
+    private void fetchWeather(double lat, double lon, String travelDate, WeatherResponse[] box, String[] error, Runnable onComplete) {
+        try {
+            Call<WeatherResponse> call;
+            if (travelDate != null) {
+                // If date is provided, we fetch forecast for that specific day
+                call = RetrofitClient.weather().getCurrentWeather(lat, lon, true, travelDate, travelDate);
+            } else {
+                call = RetrofitClient.weather().getCurrentWeather(lat, lon, true, null, null);
+            }
+            Response<WeatherResponse> w = call.execute();
+            if (w.isSuccessful()) box[0] = w.body();
+            else if (error[0] == null) error[0] = "Weather failed";
+        } catch (IOException e) {
+            if (error[0] == null) error[0] = e.getMessage();
+        } finally { onComplete.run(); }
+    }
+
+    private void fetchCountry(String code, CountryResponse[] box, Runnable onComplete) {
+        if (code == null || code.isEmpty()) {
+            onComplete.run();
+            return;
+        }
+        try {
+            Response<List<CountryResponse>> c = RetrofitClient.country().getCountryByCode(code).execute();
+            if (c.isSuccessful() && c.body() != null && !c.body().isEmpty()) {
+                box[0] = c.body().get(0);
+            }
+        } catch (IOException ignored) { }
+        finally { onComplete.run(); }
+    }
+
+    private void fetchImage(String city, String[] box, Runnable onComplete) {
+        try {
+            Response<PixabayResponse> p = RetrofitClient.pixabay()
+                    .searchImage(RetrofitClient.PIXABAY_API_KEY, city, "photo").execute();
+            if (p.isSuccessful() && p.body() != null && p.body().getHits() != null && !p.body().getHits().isEmpty()) {
+                box[0] = p.body().getHits().get(0).getLargeImageURL();
+            }
+        } catch (Exception ignored) { }
+        finally { onComplete.run(); }
+    }
+
+    public void updateItem(PackingItem item) {
+        executor.execute(() -> packingDao.updateItem(item));
+    }
+
+    public void deleteForCity(String cityName) {
+        executor.execute(() -> packingDao.deleteAllForCity(cityName));
+    }
+
+    public void deleteSearch(String city) {
+        executor.execute(() -> packingDao.deleteSearch(city));
+    }
+
+    public void saveSearch(String city) {
+        executor.execute(() -> {
+            packingDao.deleteSearch(city);
+            packingDao.insertSearch(new SearchHistory(city));
+        });
+    }
+
+    public void loadSearchHistory(OnHistoryLoadedCallback callback) {
+        executor.execute(() -> {
+            List<String> history = packingDao.getSearchHistory();
+            callback.onLoaded(history);
+        });
+    }
+
+    public interface OnHistoryLoadedCallback {
+        void onLoaded(List<String> history);
+    }
+
     @Nullable
     private List<PackingItem> getAiPackingList(String city, @Nullable WeatherResponse weather, @Nullable CountryResponse country) {
         try {
-            StringBuilder prompt = new StringBuilder("Generate a practical packing list for a trip to " + city + ". ");
+            StringBuilder prompt = new StringBuilder("Generate a practical packing list for a trip to " + city + " (use Polish language). ");
             if (weather != null && weather.getCurrentWeather() != null) {
                 prompt.append("Current temperature is ").append(weather.getCurrentWeather().getTemperature()).append("°C. ");
             }
             if (country != null) {
                 prompt.append("Destination language is ").append(country.getFirstLanguageName()).append(". ");
             }
-            prompt.append("Respond only with a list of items, one per line, maximum 15 items. No introduction or extra text.");
+            prompt.append("Respond only with a list of items, in Polish, one per line, maximum 15 items. No introduction or extra text.");
 
             JsonObject message = new JsonObject();
             message.addProperty("role", "user");
@@ -176,46 +226,43 @@ public class PackingRepository {
             bodyJson.add("messages", messages);
 
             RequestBody body = RequestBody.create(
-                    MediaType.parse("application/json"),
-                    bodyJson.toString()
+                    bodyJson.toString(),
+                    MediaType.parse("application/json")
             );
 
             Response<ResponseBody> response = RetrofitClient.ai()
-                    .getPackingList("Bearer " + RetrofitClient.GROQ_API_KEY, body)
-                    .execute();
+                    .getPackingList("Bearer " + RetrofitClient.GROQ_API_KEY, body).execute();
 
             if (response.isSuccessful() && response.body() != null) {
-                String jsonResponse = response.body().string();
-                JsonObject root = JsonParser.parseString(jsonResponse).getAsJsonObject();
-                String content = root.getAsJsonArray("choices")
-                        .get(0).getAsJsonObject()
-                        .getAsJsonObject("message")
-                        .get("content").getAsString();
+                try (ResponseBody responseBody = response.body()) {
+                    String content = JsonParser.parseString(responseBody.string())
+                            .getAsJsonObject().getAsJsonArray("choices")
+                            .get(0).getAsJsonObject().getAsJsonObject("message")
+                            .get("content").getAsString();
 
-                List<PackingItem> items = new ArrayList<>();
-                for (String line : content.split("\n")) {
-                    String clean = line.replaceAll("^[-*\\d.]+\\s*", "").trim();
-                    if (!clean.isEmpty()) {
-                        items.add(new PackingItem(clean));
+                    List<PackingItem> items = new ArrayList<>();
+                    java.util.Set<String> seen = new java.util.HashSet<>();
+                    
+                    for (String line : content.split("\n")) {
+                        String clean = line.replaceAll("^[-*\\d.]+\\s*", "").trim();
+                        if (!clean.isEmpty()) {
+                            String lower = clean.toLowerCase();
+                            if (!seen.contains(lower)) {
+                                items.add(new PackingItem(clean));
+                                seen.add(lower);
+                            }
+                        }
                     }
+                    return items;
                 }
-                return items;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception ignored) { }
         return null;
     }
 
-    /**
-     * Pure function that turns API responses into a packing list.
-     * Kept package-private for testability.
-     */
     @NonNull
-    List<PackingItem> buildList(@Nullable WeatherResponse weather,
-                                @Nullable CountryResponse country) {
+    List<PackingItem> buildList(@Nullable WeatherResponse weather, @Nullable CountryResponse country) {
         List<PackingItem> list = new ArrayList<>();
-        // Base items - Increased to at least 10 items
         list.add(new PackingItem("Paszport / Dokumenty"));
         list.add(new PackingItem("Portfel i gotówka"));
         list.add(new PackingItem("Telefon i ładowarka"));
@@ -225,48 +272,25 @@ public class PackingRepository {
         list.add(new PackingItem("Koszulki i spodnie"));
         list.add(new PackingItem("Wygodne buty"));
         list.add(new PackingItem("Podstawowa apteczka"));
-        list.add(new PackingItem("Przybory toaletowe"));
         list.add(new PackingItem("Słuchawki"));
 
         if (weather != null && weather.getCurrentWeather() != null) {
             double temp = weather.getCurrentWeather().getTemperature();
             int code   = weather.getCurrentWeather().getWeatherCode();
-
-            if (temp < 10) {
-                list.add(new PackingItem("Ciepła kurtka"));
-                list.add(new PackingItem("Czapka i rękawiczki"));
-            } else if (temp < 20) {
-                list.add(new PackingItem("Lekka kurtka / Bluza"));
-            }
-            
+            if (temp < 15) list.add(new PackingItem("Ciepła bluza / Kurtka"));
             if (temp > 25) {
                 list.add(new PackingItem("Krem z filtrem UV"));
                 list.add(new PackingItem("Okulary przeciwsłoneczne"));
-                list.add(new PackingItem("Krótkie spodenki"));
             }
-
-            // WMO weather codes: 51-67 = drizzle/rain, 80-82 = showers,
-            // 95-99 = thunderstorm.  We treat the "rainy" family as umbrella-worthy.
             if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95) {
                 list.add(new PackingItem("Parasol / Płaszcz przeciwdeszczowy"));
             }
         }
-
-        if (country != null) {
-            list.add(new PackingItem("Gotówka: " + country.getFirstCurrencyCode()));
-            list.add(new PackingItem("Słownik/Tłumacz: " + country.getFirstLanguageName()));
-        }
-
-        return Collections.unmodifiableList(list);
+        return list;
     }
 
-    /** Repository callback delivered to the ViewModel. */
     public interface Callback {
-        void onSuccess(@NonNull List<PackingItem> items,
-                       @Nullable String imageUrl,
-                       @NonNull String cityName,
-                       double lat,
-                       double lon);
+        void onSuccess(@NonNull List<PackingItem> items, @Nullable String imageUrl, @NonNull String cityName, double lat, double lon);
         void onError(@NonNull String message);
     }
 }

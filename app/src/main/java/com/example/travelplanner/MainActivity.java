@@ -7,6 +7,7 @@ import androidx.navigation.NavController;
 import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.NavigationUI;
 
+import com.example.travelplanner.ui.PackingViewModel;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
@@ -23,13 +24,14 @@ public class MainActivity extends AppCompatActivity {
             BottomNavigationView navView = findViewById(R.id.nav_view);
             NavigationUI.setupWithNavController(navView, navController);
 
-            // Ensure back button works for fragments
-            navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
-                if (destination.getId() == R.id.navigation_home) {
-                    com.example.travelplanner.ui.PackingViewModel viewModel = 
-                        new androidx.lifecycle.ViewModelProvider(this).get(com.example.travelplanner.ui.PackingViewModel.class);
-                    viewModel.resetToIdle();
+            // Bug fix: Ensure the "Start" tab only performs navigation without resetting the state
+            navView.setOnItemSelectedListener(item -> {
+                if (item.getItemId() == R.id.navigation_home) {
+                    // Just navigate to home, do NOT call viewModel.resetState() here
+                    navController.navigate(R.id.navigation_home);
+                    return true;
                 }
+                return NavigationUI.onNavDestinationSelected(item, navController);
             });
         }
     }

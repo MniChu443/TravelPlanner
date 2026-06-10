@@ -18,6 +18,8 @@ public interface GeocodingApi {
     Call<List<GeocodingResponse>> searchCity(
             @Query("q") String cityName,
             @Query("format") String format,        // "jsonv2"
-            @Query("limit") int limit              // usually 1
+            @Query("limit") int limit,             // usually 1
+            @Query("addressdetails") int addressDetails, // 1 to get city/town/village separately
+            @Query("accept-language") String language // "pl" for Polish
     );
 }

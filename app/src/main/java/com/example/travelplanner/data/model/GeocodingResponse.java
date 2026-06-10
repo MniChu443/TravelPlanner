@@ -24,6 +24,25 @@ public class GeocodingResponse {
     @SerializedName("display_name")
     private String displayName;
 
+    @SerializedName("address")
+    private Address address;
+
+    public static class Address {
+        @SerializedName("city") public String city;
+        @SerializedName("town") public String town;
+        @SerializedName("village") public String village;
+        @SerializedName("municipality") public String municipality;
+    }
+
+    public String getCityOnly() {
+        if (address == null) return displayName;
+        if (address.city != null) return address.city;
+        if (address.town != null) return address.town;
+        if (address.village != null) return address.village;
+        if (address.municipality != null) return address.municipality;
+        return displayName;
+    }
+
     public String getLat() {
         return lat;
     }
