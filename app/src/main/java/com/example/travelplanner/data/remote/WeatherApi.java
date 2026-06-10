@@ -16,6 +16,8 @@ public interface WeatherApi {
     Call<WeatherResponse> getCurrentWeather(
             @Query("latitude") double latitude,
             @Query("longitude") double longitude,
-            @Query("current_weather") boolean currentWeather   // true
+            @Query("current_weather") boolean currentWeather,
+            @Query("start_date") String startDate,
+            @Query("end_date") String endDate
     );
 }

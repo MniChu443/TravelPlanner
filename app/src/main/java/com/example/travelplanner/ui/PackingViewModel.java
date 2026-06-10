@@ -1,104 +1,144 @@
 package com.example.travelplanner.ui;
 
+import android.app.Application;
+import android.content.Context;
+import android.content.SharedPreferences;
+
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
-import androidx.lifecycle.ViewModel;
 
 import com.example.travelplanner.data.model.PackingItem;
 import com.example.travelplanner.data.model.PackingState;
 import com.example.travelplanner.data.repository.PackingRepository;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
  * Holds UI state for the home screen.
- * Owns a single-thread Executor so the Repository can run its chained
- * network calls off the main thread.
  */
-public class PackingViewModel extends ViewModel {
+public class PackingViewModel extends AndroidViewModel {
 
-    private final PackingRepository repository = new PackingRepository();
+    private static final String PREFS_NAME = "travel_planner_prefs";
+    private static final String KEY_LAST_CITY = "last_city";
+
+    private final PackingRepository repository;
+    private final SharedPreferences prefs;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
     private final MutableLiveData<PackingState> state = new MutableLiveData<>();
     private final MutableLiveData<List<String>> searchHistory = new MutableLiveData<>(new java.util.ArrayList<>());
+    
+    // New: Flag to control when HomeFragment should auto-navigate
+    private final MutableLiveData<Boolean> shouldNavigateToPacking = new MutableLiveData<>(false);
 
-    public LiveData<PackingState> getState() {
-        return state;
+    public PackingViewModel(@NonNull Application application) {
+        super(application);
+        this.repository = new PackingRepository(application);
+        this.prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        state.setValue(PackingState.idle());
+        loadPersistentData();
     }
 
-    public LiveData<List<String>> getSearchHistory() {
-        return searchHistory;
+    private void loadPersistentData() {
+        // Load history from Room
+        repository.loadSearchHistory(searchHistory::postValue);
+
+        // Load last city from SharedPreferences and trigger auto-load WITHOUT navigation
+        String lastCity = prefs.getString(KEY_LAST_CITY, null);
+        if (lastCity != null) {
+            loadCityData(lastCity, null, false);
+        }
     }
 
-    /** Triggered when the user taps the "Search & Generate" button. */
+    public LiveData<PackingState> getState() { return state; }
+    public LiveData<List<String>> getSearchHistory() { return searchHistory; }
+    public LiveData<Boolean> getShouldNavigateToPacking() { return shouldNavigateToPacking; }
+
+    public void setShouldNavigateToPacking(boolean should) {
+        shouldNavigateToPacking.setValue(should);
+    }
+
+    public boolean consumeNavigationRequest() {
+        Boolean should = shouldNavigateToPacking.getValue();
+        if (Objects.equals(should, Boolean.TRUE)) {
+            shouldNavigateToPacking.setValue(false);
+            return true;
+        }
+        return false;
+    }
+
     public void generatePackingList(@NonNull String cityName) {
+        loadCityData(cityName, null, true);
+    }
+
+    public void generatePackingList(@NonNull String cityName, @Nullable String travelDate) {
+        loadCityData(cityName, travelDate, true);
+    }
+
+    private void loadCityData(@NonNull String cityName, @Nullable String travelDate, boolean navigate) {
         if (cityName.trim().isEmpty()) {
             state.setValue(PackingState.error("Please enter a city name."));
             return;
         }
 
-        // 1. Force a clean 'loading' state on the main thread
-        // We set a special flag or just clear thecityName to indicate this is a NEW search
+        // Save as last city
+        prefs.edit().putString(KEY_LAST_CITY, cityName.trim()).apply();
+
+        shouldNavigateToPacking.setValue(navigate); 
         state.setValue(PackingState.loading());
+        repository.buildPackingList(cityName.trim(), travelDate, new PackingRepository.Callback() {
+            @Override
+            public void onSuccess(@NonNull List<PackingItem> items, String imageUrl, @NonNull String city, double lat, double lon) {
+                updateHistory(city); // This now saves to DB and reloads LiveData immediately
+                state.postValue(PackingState.success(items, imageUrl, city, lat, lon));
+            }
 
-        io.execute(() -> {
-            repository.buildPackingList(cityName.trim(), new PackingRepository.Callback() {
-                @Override
-                public void onSuccess(@NonNull List<PackingItem> items,
-                                      @androidx.annotation.Nullable String imageUrl,
-                                      @NonNull String city,
-                                      double lat,
-                                      double lon) {
-                    
-                    // 3. Post history update separately
-                    List<String> currentHistory = searchHistory.getValue();
-                    List<String> newHistory = (currentHistory == null) ? new java.util.ArrayList<>() : new java.util.ArrayList<>(currentHistory);
-                    newHistory.remove(city);
-                    newHistory.add(0, city);
-                    if (newHistory.size() > 5) newHistory.remove(5);
-                    searchHistory.postValue(newHistory);
-
-                    // 4. Success - using postValue for thread safety
-                    state.postValue(PackingState.success(items, imageUrl, city, lat, lon));
-                }
-
-                @Override
-                public void onError(@NonNull String message) {
-                    state.postValue(PackingState.error(message));
-                }
-            });
+            @Override
+            public void onError(@NonNull String message) {
+                state.postValue(PackingState.error(message));
+                shouldNavigateToPacking.postValue(false);
+            }
         });
     }
 
-    /** Toggle one item's `packed` flag (used by the RecyclerView checkbox). */
+    private void updateHistory(String city) {
+        repository.saveSearch(city);
+        repository.loadSearchHistory(searchHistory::postValue);
+    }
+
     public void togglePacked(int position) {
         PackingState current = state.getValue();
         if (current == null || current.items == null) return;
-        if (position < 0 || position >= current.items.size()) return;
-
+        
         PackingItem item = current.items.get(position);
         item.setPacked(!item.isPacked());
-
-        // Rebuild a new state so observers receive a new immutable object.
+        repository.updateItem(item);
+        
         state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon));
     }
 
-    /** Add a custom item to the list. */
-    public void addCustomItem(@NonNull String itemName) {
-        PackingState current = state.getValue();
-        if (current == null) return;
-
-        List<PackingItem> newItems = new java.util.ArrayList<>(current.items);
-        newItems.add(0, new PackingItem(itemName));
-
-        state.setValue(PackingState.success(newItems, current.imageUrl, current.cityName, current.lat, current.lon));
+    public void resetState() {
+        prefs.edit().remove(KEY_LAST_CITY).apply();
+        state.setValue(PackingState.idle());
     }
 
-    /** Clear error message from state. */
+    public void deleteHistoryItem(String city) {
+        repository.deleteSearch(city);
+        repository.loadSearchHistory(history -> {
+            searchHistory.postValue(history);
+        });
+    }
+
+    public void goBackToHome() {
+        state.setValue(PackingState.idle());
+    }
+
     public void clearError() {
         PackingState current = state.getValue();
         if (current != null && current.errorMessage != null) {
@@ -106,9 +146,16 @@ public class PackingViewModel extends ViewModel {
         }
     }
 
-    /** Reset state to idle. */
-    public void resetToIdle() {
-        state.setValue(PackingState.idle());
+    @NonNull
+    public String formatPackingListForShare() {
+        PackingState current = state.getValue();
+        if (current == null || current.items == null) return "";
+        
+        StringBuilder sb = new StringBuilder("Packing List for " + current.cityName + ":\n");
+        for (PackingItem item : current.items) {
+            sb.append(item.isPacked() ? "[x] " : "[ ] ").append(item.getName()).append("\n");
+        }
+        return sb.toString();
     }
 
     @Override

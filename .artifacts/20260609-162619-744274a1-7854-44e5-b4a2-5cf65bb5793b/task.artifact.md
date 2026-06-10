@@ -1,0 +1,26 @@
+# Task List - TravelPlanner Improvements
+
+- [ ] Update Dependencies & Themes
+    - [ ] Add Room to `libs.versions.toml`
+    - [ ] Add Room to `build.gradle.kts`
+    - [ ] Update `themes.xml` to Material 3
+- [ ] Implement Room Persistence
+    - [ ] Update `PackingItem.java` Entity
+    - [ ] Create `PackingDao.java`
+    - [ ] Create `AppDatabase.java`
+- [ ] Update MVVM Layers
+    - [ ] Update `PackingRepository.java` to use Room
+    - [ ] Update `PackingViewModel.java` (Reset state + Async Room ops)
+- [ ] UI & Styling Improvements
+    - [ ] Create `checkbox_selector.xml`
+    - [ ] Update `item_packing.xml` (MD3 Card + Checkbox style)
+    - [ ] Update `fragment_packing.xml` (CollapsingToolbarLayout + FAB)
+- [ ] Navigation & New Feature
+    - [ ] Implement Back/Search Icon navigation in `PackingFragment.java`
+    - [ ] Implement Share functionality in `PackingFragment.java`
+- [ ] Verification
+    - [ ] Verify State Reset (Bug A)
+    - [ ] Verify Back Navigation (Bug B & C)
+    - [ ] Verify Persistence
+    - [ ] Verify UI/Checkbox styling
+    - [ ] Verify Share feature

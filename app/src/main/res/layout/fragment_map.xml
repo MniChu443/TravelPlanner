@@ -20,6 +20,36 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_margin="16dp"
+            android:layout_gravity="bottom|end">
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabZoomUser"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:contentDescription="Zoom to me"
+                app:fabSize="mini"
+                app:srcCompat="@android:drawable/ic_menu_mylocation"
+                app:backgroundTint="?attr/colorSurface"
+                app:tint="?attr/colorPrimary" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabZoomDest"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="Zoom to destination"
+                app:fabSize="mini"
+                app:srcCompat="@android:drawable/ic_dialog_map"
+                app:backgroundTint="?attr/colorSurface"
+                app:tint="?attr/colorPrimary" />
+
+        </LinearLayout>
+
     </com.google.android.material.card.MaterialCardView>
 
     <com.google.android.material.card.MaterialCardView

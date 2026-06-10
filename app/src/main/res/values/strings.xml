@@ -11,4 +11,14 @@
     <string name="loading">Ładowanie...</string>
     <string name="selected_city">Wybrano: %1$s</string>
     <string name="city_image_description">Zdjęcie miasta</string>
+
+    <!-- Back / search-again navigation -->
+    <string name="back">Wstecz</string>
+    <string name="search_again">Szukaj innego miasta</string>
+
+    <!-- Share feature -->
+    <string name="share_list">Udostępnij listę</string>
+    <string name="share_chooser_title">Udostępnij listę pakowania</string>
+    <string name="share_subject">Moja lista pakowania dla %1$s</string>
+    <string name="share_empty">Najpierw wygeneruj listę</string>
 </resources>
