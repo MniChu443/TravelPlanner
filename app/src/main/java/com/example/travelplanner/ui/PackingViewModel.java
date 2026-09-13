@@ -7,42 +7,49 @@ import androidx.lifecycle.ViewModel;
 
 import com.example.travelplanner.data.model.PackingItem;
 import com.example.travelplanner.data.model.PackingState;
+import com.example.travelplanner.data.model.Trip;
 import com.example.travelplanner.data.repository.PackingRepository;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/**
- * Holds UI state for the home screen.
- * Owns a single-thread Executor so the Repository can run its chained
- * network calls off the main thread.
- */
 public class PackingViewModel extends ViewModel {
 
     private final PackingRepository repository = new PackingRepository();
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
+    // The currently active screen state (for PackingFragment)
     private final MutableLiveData<PackingState> state = new MutableLiveData<>();
-    private final MutableLiveData<List<String>> searchHistory = new MutableLiveData<>(new java.util.ArrayList<>());
+    
+    // Master list of all user trips
+    private final MutableLiveData<List<Trip>> myTrips = new MutableLiveData<>(new ArrayList<>());
+    
+    private final MutableLiveData<Boolean> navigateToPackingEvent = new MutableLiveData<>(false);
 
     public LiveData<PackingState> getState() {
         return state;
     }
 
-    public LiveData<List<String>> getSearchHistory() {
-        return searchHistory;
+    public LiveData<List<Trip>> getMyTrips() {
+        return myTrips;
     }
 
-    /** Triggered when the user taps the "Search & Generate" button. */
-    public void generatePackingList(@NonNull String cityName) {
+    public LiveData<Boolean> getNavigateToPackingEvent() {
+        return navigateToPackingEvent;
+    }
+
+    public void onNavigatedToPacking() {
+        navigateToPackingEvent.setValue(false);
+    }
+
+    public void generatePackingList(@NonNull String cityName, long dateInMillis) {
         if (cityName.trim().isEmpty()) {
             state.setValue(PackingState.error("Please enter a city name."));
             return;
         }
 
-        // 1. Force a clean 'loading' state on the main thread
-        // We set a special flag or just clear thecityName to indicate this is a NEW search
         state.setValue(PackingState.loading());
 
         io.execute(() -> {
@@ -54,16 +61,19 @@ public class PackingViewModel extends ViewModel {
                                       double lat,
                                       double lon) {
                     
-                    // 3. Post history update separately
-                    List<String> currentHistory = searchHistory.getValue();
-                    List<String> newHistory = (currentHistory == null) ? new java.util.ArrayList<>() : new java.util.ArrayList<>(currentHistory);
-                    newHistory.remove(city);
-                    newHistory.add(0, city);
-                    if (newHistory.size() > 5) newHistory.remove(5);
-                    searchHistory.postValue(newHistory);
+                    // Create new Trip
+                    Trip trip = new Trip(city, dateInMillis, items, imageUrl, lat, lon);
+                    
+                    // Add to master list
+                    List<Trip> currentTrips = myTrips.getValue();
+                    if (currentTrips == null) currentTrips = new ArrayList<>();
+                    List<Trip> updatedTrips = new ArrayList<>(currentTrips);
+                    updatedTrips.add(0, trip); // Add to top
+                    myTrips.postValue(updatedTrips);
 
-                    // 4. Success - using postValue for thread safety
-                    state.postValue(PackingState.success(items, imageUrl, city, lat, lon));
+                    // Set as active state
+                    state.postValue(PackingState.success(items, imageUrl, city, lat, lon, trip.getId(), dateInMillis));
+                    navigateToPackingEvent.postValue(true);
                 }
 
                 @Override
@@ -74,7 +84,26 @@ public class PackingViewModel extends ViewModel {
         });
     }
 
-    /** Toggle one item's `packed` flag (used by the RecyclerView checkbox). */
+    public void selectTrip(String tripId) {
+        List<Trip> trips = myTrips.getValue();
+        if (trips == null) return;
+        for (Trip trip : trips) {
+            if (trip.getId().equals(tripId)) {
+                state.setValue(PackingState.success(
+                        trip.getItems(),
+                        trip.getImageUrl(),
+                        trip.getCityName(),
+                        trip.getLat(),
+                        trip.getLon(),
+                        trip.getId(),
+                        trip.getDateInMillis()
+                ));
+                navigateToPackingEvent.setValue(true);
+                break;
+            }
+        }
+    }
+
     public void togglePacked(int position) {
         PackingState current = state.getValue();
         if (current == null || current.items == null) return;
@@ -83,30 +112,53 @@ public class PackingViewModel extends ViewModel {
         PackingItem item = current.items.get(position);
         item.setPacked(!item.isPacked());
 
-        // Rebuild a new state so observers receive a new immutable object.
-        state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon));
+        updateCurrentTripItems(current.items);
+        state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.tripDateInMillis));
     }
 
-    /** Add a custom item to the list. */
     public void addCustomItem(@NonNull String itemName) {
         PackingState current = state.getValue();
-        if (current == null) return;
+        if (current == null || current.items == null) return;
 
-        List<PackingItem> newItems = new java.util.ArrayList<>(current.items);
+        List<PackingItem> newItems = new ArrayList<>(current.items);
         newItems.add(0, new PackingItem(itemName));
 
-        state.setValue(PackingState.success(newItems, current.imageUrl, current.cityName, current.lat, current.lon));
+        updateCurrentTripItems(newItems);
+        state.setValue(PackingState.success(newItems, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.tripDateInMillis));
     }
-
-    /** Clear error message from state. */
-    public void clearError() {
+    
+    private void updateCurrentTripItems(List<PackingItem> updatedItems) {
         PackingState current = state.getValue();
-        if (current != null && current.errorMessage != null) {
-            state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon));
+        if (current == null || current.tripId == null) return;
+        
+        List<Trip> trips = myTrips.getValue();
+        if (trips != null) {
+            for (Trip trip : trips) {
+                if (trip.getId().equals(current.tripId)) {
+                    trip.setItems(updatedItems);
+                    break;
+                }
+            }
         }
     }
 
-    /** Reset state to idle. */
+    public List<String> getSuggestedOptionalItems() {
+        return java.util.Arrays.asList(
+                "Aparat fotograficzny", "Laptop do pracy", "Karta pamięci / Pendrive",
+                "Przewodnik drukowany", "Suszarka do włosów", "Żelazko turystyczne",
+                "Gry planszowe / Karty", "Namiot", "Karimata", "Kijki trekkingowe",
+                "Naczynia turystyczne", "Mata plażowa", "Krem po opalaniu",
+                "Środek na komary", "Poduszka podróżna (rogal)"
+        );
+    }
+
+    public void clearError() {
+        PackingState current = state.getValue();
+        if (current != null && current.errorMessage != null) {
+            state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.tripDateInMillis));
+        }
+    }
+
     public void resetToIdle() {
         state.setValue(PackingState.idle());
     }

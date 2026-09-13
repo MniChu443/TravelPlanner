@@ -1,5 +1,6 @@
 package com.example.travelplanner.ui;
 
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -9,6 +10,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Button;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -23,6 +25,7 @@ import com.example.travelplanner.R;
 import com.example.travelplanner.data.model.PackingItem;
 
 import java.util.Collections;
+import java.util.List;
 
 public class PackingFragment extends Fragment {
 
@@ -30,11 +33,13 @@ public class PackingFragment extends Fragment {
     private PackingAdapter adapter;
     private ImageView ivHeader;
     private TextView tvCityName;
+    private TextView tvTripCountdown;
     private TextView tvProgress;
     private RecyclerView rvPacking;
     private EditText etNewItem;
     private ImageButton btnAddItem;
     private View btnSearchAgain;
+    private Button btnSuggestedItems;
 
     @Nullable
     @Override
@@ -43,11 +48,13 @@ public class PackingFragment extends Fragment {
 
         ivHeader = root.findViewById(R.id.ivCityHeader);
         tvCityName = root.findViewById(R.id.tvCityName);
+        tvTripCountdown = root.findViewById(R.id.tvTripCountdown);
         tvProgress = root.findViewById(R.id.tvProgress);
         rvPacking = root.findViewById(R.id.rvPacking);
         etNewItem = root.findViewById(R.id.etNewItem);
         btnAddItem = root.findViewById(R.id.btnAddItem);
         btnSearchAgain = root.findViewById(R.id.btnSearchAgain);
+        btnSuggestedItems = root.findViewById(R.id.btnSuggestedItems);
 
         viewModel = new ViewModelProvider(requireActivity()).get(PackingViewModel.class);
         
@@ -74,32 +81,70 @@ public class PackingFragment extends Fragment {
                 etNewItem.setText("");
             }
         });
+        
+        if (btnSuggestedItems != null) {
+            btnSuggestedItems.setOnClickListener(v -> showSuggestedItemsDialog());
+        }
 
         btnSearchAgain.setOnClickListener(v -> {
-            // Reset ViewModel state so HomeFragment doesn't auto-redirect back here
             viewModel.resetToIdle();
-            
-            // Explicitly select Home tab in BottomNav if it exists
             if (getActivity() != null) {
                 com.google.android.material.bottomnavigation.BottomNavigationView navView = 
                     getActivity().findViewById(R.id.nav_view);
                 if (navView != null) {
                     navView.setSelectedItemId(R.id.navigation_home);
-                    return; // setSelectedItemId usually triggers navigation
+                    return; 
                 }
             }
-
-            // Fallback navigation if BottomNav not found
             androidx.navigation.NavController navController = androidx.navigation.Navigation.findNavController(requireActivity(), R.id.nav_host_fragment);
             navController.navigate(R.id.navigation_home);
         });
+    }
+
+    private void showSuggestedItemsDialog() {
+        List<String> suggested = viewModel.getSuggestedOptionalItems();
+        CharSequence[] items = suggested.toArray(new CharSequence[0]);
+        boolean[] checkedItems = new boolean[items.length];
+        
+        new AlertDialog.Builder(getContext())
+            .setTitle("Wybierz dodatkowe przedmioty")
+            .setMultiChoiceItems(items, checkedItems, (dialog, which, isChecked) -> {
+                checkedItems[which] = isChecked;
+            })
+            .setPositiveButton("Dodaj wybrane", (dialog, which) -> {
+                for (int i = 0; i < items.length; i++) {
+                    if (checkedItems[i]) {
+                        viewModel.addCustomItem(items[i].toString());
+                    }
+                }
+            })
+            .setNegativeButton("Anuluj", null)
+            .show();
     }
 
     private void observeViewModel() {
         viewModel.getState().observe(getViewLifecycleOwner(), state -> {
             if (state == null || state.loading) return;
 
-            tvCityName.setText(state.cityName);
+            // Skracamy długa nazwę geokodowania (np. "Paris, Île-de-France, France" -> "Paris")
+            String shortCity = state.cityName;
+            if (shortCity != null && shortCity.contains(",")) {
+                shortCity = shortCity.split(",")[0].trim();
+            }
+            tvCityName.setText(shortCity);
+            
+            if (state.tripDateInMillis > 0) {
+                long diff = state.tripDateInMillis - System.currentTimeMillis();
+                int days = (int) (diff / (1000 * 60 * 60 * 24));
+                if (days <= 0) {
+                    tvTripCountdown.setText("Jesteś w trakcie wyjazdu!");
+                } else {
+                    tvTripCountdown.setText("Pozostało dni: " + days);
+                }
+                tvTripCountdown.setVisibility(View.VISIBLE);
+            } else {
+                tvTripCountdown.setVisibility(View.GONE);
+            }
             
             if (state.items != null) {
                 adapter.updateItems(state.items);
@@ -110,8 +155,15 @@ public class PackingFragment extends Fragment {
                 tvProgress.setText(getString(R.string.packed_status, packed, state.items.size()));
             }
 
-            if (state.imageUrl != null) {
-                Glide.with(this).load(state.imageUrl).into(ivHeader);
+            if (state.imageUrl != null && !state.imageUrl.isEmpty()) {
+                Glide.with(this)
+                        .load(state.imageUrl)
+                        .placeholder(R.drawable.ic_city_placeholder)
+                        .error(R.drawable.ic_city_placeholder)
+                        .centerCrop()
+                        .into(ivHeader);
+            } else {
+                ivHeader.setImageResource(R.drawable.ic_city_placeholder);
             }
         });
     }

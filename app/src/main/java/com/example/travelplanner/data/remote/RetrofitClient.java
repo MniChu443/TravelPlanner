@@ -17,6 +17,7 @@ public final class RetrofitClient {
     public static final String NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org/";
     public static final String OPEN_METEO_BASE_URL = "https://api.open-meteo.com/";
     public static final String RESTCOUNTRIES_BASE_URL = "https://restcountries.com/";
+    public static final String WIKIPEDIA_BASE_URL = "https://pl.wikipedia.org/";
     public static final String PIXABAY_BASE_URL = "https://pixabay.com/";
     public static final String GROQ_BASE_URL = "https://api.groq.com/openai/v1/";
 
@@ -37,6 +38,7 @@ public final class RetrofitClient {
     private static final Retrofit NOMINATIM;
     private static final Retrofit OPEN_METEO;
     private static final Retrofit REST_COUNTRIES;
+    private static final Retrofit WIKIPEDIA;
     private static final Retrofit PIXABAY;
     private static final Retrofit GROQ;
 
@@ -72,6 +74,12 @@ public final class RetrofitClient {
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
 
+        WIKIPEDIA = new Retrofit.Builder()
+                .baseUrl(WIKIPEDIA_BASE_URL)
+                .client(httpClient)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+
         PIXABAY = new Retrofit.Builder()
                 .baseUrl(PIXABAY_BASE_URL)
                 .client(httpClient)
@@ -95,6 +103,10 @@ public final class RetrofitClient {
 
     public static CountryApi country() {
         return REST_COUNTRIES.create(CountryApi.class);
+    }
+
+    public static WikipediaApi wikipedia() {
+        return WIKIPEDIA.create(WikipediaApi.class);
     }
 
     public static PixabayApi pixabay() {

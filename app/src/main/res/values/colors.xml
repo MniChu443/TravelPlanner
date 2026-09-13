@@ -3,12 +3,15 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <color name="primary">#2196F3</color>
-    <color name="primary_dark">#1976D2</color>
-    <color name="accent">#FF4081</color>
-    <color name="background">#F5F7FA</color>
+    <color name="primary">#1E88E5</color> <!-- Blue 600 -->
+    <color name="primary_dark">#1565C0</color> <!-- Blue 800 -->
+    <color name="accent">#03A9F4</color> <!-- Light Blue 500 -->
+
+    <color name="background">#E3F2FD</color> <!-- Blue 50 -->
     <color name="card_bg">#FFFFFF</color>
-    <color name="text_primary">#2D3436</color>
-    <color name="text_secondary">#636E72</color>
-    <color name="divider">#DFE6E9</color>
+
+    <color name="text_primary">#0D47A1</color> <!-- Blue 900 -->
+    <color name="text_secondary">#1976D2</color> <!-- Blue 700 -->
+
+    <color name="divider">#BBDEFB</color> <!-- Blue 100 -->
 </resources>

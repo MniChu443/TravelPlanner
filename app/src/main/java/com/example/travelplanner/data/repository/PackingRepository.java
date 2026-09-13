@@ -6,7 +6,7 @@ import androidx.annotation.Nullable;
 import com.example.travelplanner.data.model.CountryResponse;
 import com.example.travelplanner.data.model.GeocodingResponse;
 import com.example.travelplanner.data.model.PackingItem;
-import com.example.travelplanner.data.model.PixabayResponse;
+import com.example.travelplanner.data.model.WikipediaResponse;
 import com.example.travelplanner.data.model.WeatherResponse;
 import com.example.travelplanner.data.remote.RetrofitClient;
 import com.google.gson.JsonArray;
@@ -124,21 +124,18 @@ public class PackingRepository {
                 }
             }, "country-call").start();
 
-            // c) Image
+            // c) Image z Wikipedia API (Darmowe, bez klucza API)
             new Thread(() -> {
                 try {
-                    Response<PixabayResponse> p = RetrofitClient.pixabay()
-                            .searchImage(RetrofitClient.PIXABAY_API_KEY,
-                                    cityName, "photo")
+                    String searchTitle = cityName.split(",")[0].trim();
+                    Response<WikipediaResponse> wiki = RetrofitClient.wikipedia()
+                            .getSummary(searchTitle)
                             .execute();
-                    if (p.isSuccessful()
-                            && p.body() != null
-                            && p.body().getHits() != null
-                            && !p.body().getHits().isEmpty()) {
-                        imageBox[0] = p.body().getHits().get(0).getLargeImageURL();
-                    } // No error: image is optional / has a fallback drawable.
+                    if (wiki.isSuccessful() && wiki.body() != null) {
+                        imageBox[0] = wiki.body().getImageUrl();
+                    }
                 } catch (Exception e) {
-                    // Image errors are silent – we just keep the placeholder.
+                    // Ciche obsłużenie błędu - w razie niepowodzenia pojawi się obraz zastępczy
                 } finally {
                     onEachComplete.run();
                 }
@@ -215,47 +212,79 @@ public class PackingRepository {
     List<PackingItem> buildList(@Nullable WeatherResponse weather,
                                 @Nullable CountryResponse country) {
         List<PackingItem> list = new ArrayList<>();
-        // Base items - Increased to at least 10 items
-        list.add(new PackingItem("Paszport / Dokumenty"));
-        list.add(new PackingItem("Portfel i gotówka"));
-        list.add(new PackingItem("Telefon i ładowarka"));
-        list.add(new PackingItem("Powerbank"));
+        
+        // --- Dokumenty i Finanse ---
+        list.add(new PackingItem("Paszport / Dowód osobisty"));
+        list.add(new PackingItem("Bilety na podróż (lot/pociąg)"));
+        list.add(new PackingItem("Karty płatnicze i gotówka"));
+        list.add(new PackingItem("Ubezpieczenie turystyczne"));
+        
+        // --- Elektronika ---
+        list.add(new PackingItem("Smartfon"));
+        list.add(new PackingItem("Ładowarka sieciowa (sprawdź przejściówki)"));
+        list.add(new PackingItem("Powerbank z kablem"));
+        list.add(new PackingItem("Słuchawki wygłuszające"));
+        list.add(new PackingItem("Czytnik e-booków / Tablet"));
+        
+        // --- Odzież (Baza) ---
+        list.add(new PackingItem("Bielizna (po jednej na każdy dzień + zapas)"));
+        list.add(new PackingItem("Skarpetki (zwykłe i ciepłe)"));
+        list.add(new PackingItem("Wygodne buty do chodzenia"));
+        list.add(new PackingItem("Spodnie / Jeansy"));
+        list.add(new PackingItem("T-shirty / Koszule"));
+        list.add(new PackingItem("Klapki (pod prysznic/na basen)"));
+        list.add(new PackingItem("Piżama / Ubranie do spania"));
+        
+        // --- Kosmetyczki i Zdrowie ---
         list.add(new PackingItem("Szczoteczka i pasta do zębów"));
-        list.add(new PackingItem("Bielizna i skarpetki"));
-        list.add(new PackingItem("Koszulki i spodnie"));
-        list.add(new PackingItem("Wygodne buty"));
-        list.add(new PackingItem("Podstawowa apteczka"));
-        list.add(new PackingItem("Przybory toaletowe"));
-        list.add(new PackingItem("Słuchawki"));
+        list.add(new PackingItem("Żel pod prysznic / Szampon (format podróżny)"));
+        list.add(new PackingItem("Dezodorant / Perfumy"));
+        list.add(new PackingItem("Podstawowa apteczka (leki przeciwbólowe, plastry)"));
+        list.add(new PackingItem("Chusteczki higieniczne i nawilżane"));
+        list.add(new PackingItem("Krem nawilżający"));
 
+        // --- Zależne od pogody ---
         if (weather != null && weather.getCurrentWeather() != null) {
             double temp = weather.getCurrentWeather().getTemperature();
             int code   = weather.getCurrentWeather().getWeatherCode();
 
-            if (temp < 10) {
-                list.add(new PackingItem("Ciepła kurtka"));
-                list.add(new PackingItem("Czapka i rękawiczki"));
+            if (temp < 12) {
+                list.add(new PackingItem("Ciepła kurtka jesienno-zimowa"));
+                list.add(new PackingItem("Czapka, szalik i grube rękawiczki"));
+                list.add(new PackingItem("Sweter / Ciepły polar"));
+                list.add(new PackingItem("Kalesony / Odzież termiczna"));
             } else if (temp < 20) {
-                list.add(new PackingItem("Lekka kurtka / Bluza"));
+                list.add(new PackingItem("Lekka kurtka / Wiatrówka"));
+                list.add(new PackingItem("Bluza lub rozpinany sweter"));
             }
             
-            if (temp > 25) {
-                list.add(new PackingItem("Krem z filtrem UV"));
-                list.add(new PackingItem("Okulary przeciwsłoneczne"));
-                list.add(new PackingItem("Krótkie spodenki"));
+            if (temp > 22) {
+                list.add(new PackingItem("Krem z wysokim filtrem UV"));
+                list.add(new PackingItem("Okulary przeciwsłoneczne (z filtrem)"));
+                list.add(new PackingItem("Krótkie spodenki / Szorty"));
+                list.add(new PackingItem("Strój kąpielowy / Kąpielówki"));
+                list.add(new PackingItem("Ręcznik szybkoschnący"));
+                list.add(new PackingItem("Nakrycie głowy (kapelusz/czapka z daszkiem)"));
             }
 
             // WMO weather codes: 51-67 = drizzle/rain, 80-82 = showers,
             // 95-99 = thunderstorm.  We treat the "rainy" family as umbrella-worthy.
             if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95) {
                 list.add(new PackingItem("Parasol / Płaszcz przeciwdeszczowy"));
+                list.add(new PackingItem("Nieprzemakalne obuwie"));
             }
         }
 
+        // --- Zależne od kraju ---
         if (country != null) {
-            list.add(new PackingItem("Gotówka: " + country.getFirstCurrencyCode()));
-            list.add(new PackingItem("Słownik/Tłumacz: " + country.getFirstLanguageName()));
+            list.add(new PackingItem("Lokalna waluta: " + country.getFirstCurrencyCode()));
+            list.add(new PackingItem("Aplikacja do tłumaczeń (Język: " + country.getFirstLanguageName() + ")"));
         }
+
+        // --- Przydatne akcesoria ---
+        list.add(new PackingItem("Butelka filtrująca na wodę"));
+        list.add(new PackingItem("Kłódka do walizki/szafki"));
+        list.add(new PackingItem("Zatyczki do uszu i opaska na oczy"));
 
         return Collections.unmodifiableList(list);
     }
