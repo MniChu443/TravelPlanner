@@ -1,5 +1,8 @@
 package com.example.travelplanner.ui;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Log;
@@ -16,17 +19,25 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.core.util.Pair;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.airbnb.lottie.LottieAnimationView;
 import com.example.travelplanner.R;
+import com.example.travelplanner.data.model.PackingState;
 import com.example.travelplanner.data.model.Trip;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.datepicker.CalendarConstraints;
 import com.google.android.material.datepicker.DateValidatorPointForward;
 import com.google.android.material.datepicker.MaterialDatePicker;
@@ -58,6 +69,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
     private ImageView imgFireActive;
     private LottieAnimationView lottieCampfireActive;
     private GoogleMap googleMap;
+    private FusedLocationProviderClient fusedLocationClient;
+    private LatLng currentLocation;
 
     @Nullable
     @Override
@@ -83,6 +96,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         lottieCampfireActive = root.findViewById(R.id.lottie_campfire_active);
 
         viewModel = new ViewModelProvider(requireActivity()).get(PackingViewModel.class);
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity());
+        requestLocationPermissions();
 
         tvSelectedDate.setOnClickListener(v -> {
             CalendarConstraints constraints = new CalendarConstraints.Builder()
@@ -125,6 +140,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         viewModel.getMyTrips().observe(getViewLifecycleOwner(), trips -> {
             updateTripsUI(trips);
             updateNextTripCountdown(trips);
+            updateMapUI();
         });
 
         viewModel.getState().observe(getViewLifecycleOwner(), state -> {
@@ -134,6 +150,7 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
                 Toast.makeText(getContext(), state.errorMessage, Toast.LENGTH_SHORT).show();
                 viewModel.clearError();
             }
+            updateMapUI();
         });
 
         viewModel.getNavigateToPackingEvent().observe(getViewLifecycleOwner(), navigate -> {
@@ -293,6 +310,95 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    private void requestLocationPermissions() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fetchCurrentLocation();
+        }
+    }
+
+    private void fetchCurrentLocation() {
+        try {
+            fusedLocationClient.getLastLocation().addOnSuccessListener(requireActivity(), location -> {
+                if (location != null) {
+                    currentLocation = new LatLng(location.getLatitude(), location.getLongitude());
+                    updateMapUI();
+                }
+            });
+        } catch (SecurityException e) {
+            Log.e(TAG, "Missing location permission", e);
+        }
+    }
+
+    private void updateMapUI() {
+        if (googleMap == null) return;
+
+        googleMap.clear();
+
+        try {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                googleMap.setMyLocationEnabled(true);
+            }
+        } catch (SecurityException ignored) { }
+
+        // Szukamy wyjazdu do wyświetlenia na mapie
+        PackingState state = viewModel.getState().getValue();
+        double targetLat = 0;
+        double targetLon = 0;
+        String targetName = "";
+
+        if (state != null && state.lat != 0 && state.lon != 0) {
+            targetLat = state.lat;
+            targetLon = state.lon;
+            targetName = state.cityName;
+        } else {
+            List<Trip> trips = viewModel.getMyTrips().getValue();
+            if (trips != null && !trips.isEmpty()) {
+                long today = System.currentTimeMillis();
+                Trip closestTrip = null;
+                long closestDiff = Long.MAX_VALUE;
+
+                for (Trip t : trips) {
+                    if (t.getLat() != 0 || t.getLon() != 0) {
+                        long diff = Math.abs(t.getStartDateInMillis() - today);
+                        if (diff < closestDiff) {
+                            closestDiff = diff;
+                            closestTrip = t;
+                        }
+                    }
+                }
+                if (closestTrip != null) {
+                    targetLat = closestTrip.getLat();
+                    targetLon = closestTrip.getLon();
+                    targetName = closestTrip.getCityName();
+                }
+            }
+        }
+
+        if (targetLat != 0 && targetLon != 0) {
+            if (targetName != null && targetName.contains(",")) {
+                targetName = targetName.split(",")[0].trim();
+            }
+
+            LatLng destination = new LatLng(targetLat, targetLon);
+            googleMap.addMarker(new MarkerOptions()
+                    .position(destination)
+                    .title(targetName));
+
+            if (currentLocation != null) {
+                PolylineOptions polylineOptions = new PolylineOptions()
+                        .add(currentLocation, destination)
+                        .width(10)
+                        .color(Color.parseColor("#1E88E5"))
+                        .geodesic(true);
+                googleMap.addPolyline(polylineOptions);
+            }
+
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(destination, 6));
+        } else {
+            googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(51.505, 10.0), 4));
+        }
+    }
+
     @Override
     public void onMapReady(@NonNull GoogleMap map) {
         this.googleMap = map;
@@ -306,6 +412,8 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         } catch (android.content.res.Resources.NotFoundException e) {
             Log.e(TAG, "Nie znaleziono pliku stylu mapy. Upewnij się, że plik map_style.json istnieje w res/raw/", e);
         }
+
+        updateMapUI();
     }
 
     private void showHistoryDialog() {
