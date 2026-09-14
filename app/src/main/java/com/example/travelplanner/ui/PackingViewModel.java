@@ -136,6 +136,22 @@ public class PackingViewModel extends ViewModel {
         }
     }
 
+    public void deleteTrip(String tripId) {
+        List<Trip> currentTrips = myTrips.getValue();
+        if (currentTrips == null) return;
+        List<Trip> updatedTrips = new ArrayList<>();
+        for (Trip trip : currentTrips) {
+            if (!trip.getId().equals(tripId)) {
+                updatedTrips.add(trip);
+            }
+        }
+        myTrips.setValue(updatedTrips);
+    }
+
+    public void clearAllTrips() {
+        myTrips.setValue(new ArrayList<>());
+    }
+
     public List<String> getSuggestedOptionalItems() {
         return java.util.Arrays.asList(
                 "Aparat fotograficzny", "Laptop do pracy", "Karta pamięci / Pendrive",

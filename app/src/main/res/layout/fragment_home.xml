@@ -14,25 +14,39 @@
 
         <TextView
             android:id="@+id/tvWelcome"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:text="Witaj w TravelPlanner!"
             android:textColor="@color/text_primary"
             android:textSize="28sp"
             android:textStyle="bold"
             app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnMenuHistory"
             app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
             android:id="@+id/tvSubtitle"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="Twój asystent podróży"
             android:textColor="@color/text_secondary"
             android:textSize="16sp"
             app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnMenuHistory"
             app:layout_constraintTop_toBottomOf="@id/tvWelcome" />
+
+        <ImageButton
+            android:id="@+id/btnMenuHistory"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Historia wyjazdów"
+            android:padding="8dp"
+            android:src="@drawable/ic_menu_hamburger"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@id/tvWelcome"
+            app:layout_constraintBottom_toBottomOf="@id/tvSubtitle" />
 
         <!-- KARTA 0: Wyszukiwarka -->
         <com.google.android.material.card.MaterialCardView

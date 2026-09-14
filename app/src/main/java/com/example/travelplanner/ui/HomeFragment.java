@@ -69,6 +69,11 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
         tripsContainer = root.findViewById(R.id.tripsContainer);
         tvSelectedDate = root.findViewById(R.id.tvSelectedDate);
         View btnSearch = root.findViewById(R.id.btnSearch);
+        View btnMenuHistory = root.findViewById(R.id.btnMenuHistory);
+
+        if (btnMenuHistory != null) {
+            btnMenuHistory.setOnClickListener(v -> showHistoryDialog());
+        }
 
         tvCountdownText = root.findViewById(R.id.tv_countdown_text);
         tvNextTripTitle = root.findViewById(R.id.tvNextTripTitle);
@@ -300,6 +305,92 @@ public class HomeFragment extends Fragment implements OnMapReadyCallback {
             }
         } catch (android.content.res.Resources.NotFoundException e) {
             Log.e(TAG, "Nie znaleziono pliku stylu mapy. Upewnij się, że plik map_style.json istnieje w res/raw/", e);
+        }
+    }
+
+    private void showHistoryDialog() {
+        List<Trip> trips = viewModel.getMyTrips().getValue();
+
+        com.google.android.material.bottomsheet.BottomSheetDialog bottomSheet =
+                new com.google.android.material.bottomsheet.BottomSheetDialog(requireContext());
+
+        View view = getLayoutInflater().inflate(R.layout.dialog_trip_history, null);
+        bottomSheet.setContentView(view);
+
+        LinearLayout historyContainer = view.findViewById(R.id.historyContainer);
+        TextView tvEmpty = view.findViewById(R.id.tvEmptyHistory);
+        View btnClearAll = view.findViewById(R.id.btnClearAllHistory);
+
+        if (trips == null || trips.isEmpty()) {
+            tvEmpty.setVisibility(View.VISIBLE);
+            btnClearAll.setVisibility(View.GONE);
+        } else {
+            tvEmpty.setVisibility(View.GONE);
+            btnClearAll.setVisibility(View.VISIBLE);
+            populateHistoryList(historyContainer, trips, bottomSheet);
+        }
+
+        btnClearAll.setOnClickListener(v -> {
+            new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("Wyczyść historię")
+                    .setMessage("Czy na pewno chcesz usunąć całą historię wyjazdów?")
+                    .setPositiveButton("Tak, usuń", (dialog, which) -> {
+                        viewModel.clearAllTrips();
+                        bottomSheet.dismiss();
+                        Toast.makeText(getContext(), "Historia wyjazdów została wyczyszczona", Toast.LENGTH_SHORT).show();
+                    })
+                    .setNegativeButton("Anuluj", null)
+                    .show();
+        });
+
+        bottomSheet.show();
+    }
+
+    private void populateHistoryList(LinearLayout container, List<Trip> trips, com.google.android.material.bottomsheet.BottomSheetDialog dialog) {
+        container.removeAllViews();
+        SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy", Locale.getDefault());
+        long today = System.currentTimeMillis();
+
+        for (Trip trip : trips) {
+            View itemView = getLayoutInflater().inflate(R.layout.item_trip_history, container, false);
+
+            TextView tvCity = itemView.findViewById(R.id.tvTripCity);
+            TextView tvDates = itemView.findViewById(R.id.tvTripDates);
+            TextView tvStatus = itemView.findViewById(R.id.tvTripStatus);
+            View btnDelete = itemView.findViewById(R.id.btnDeleteTrip);
+
+            String cleanName = trip.getCityName();
+            if (cleanName != null && cleanName.contains(",")) {
+                cleanName = cleanName.split(",")[0].trim();
+            }
+            tvCity.setText(cleanName);
+
+            String dateText = sdf.format(new Date(trip.getStartDateInMillis())) + " - " + sdf.format(new Date(trip.getEndDateInMillis()));
+            tvDates.setText(dateText);
+
+            if (today >= trip.getStartDateInMillis() && today <= trip.getEndDateInMillis()) {
+                tvStatus.setText("W trakcie wyjazdu");
+                tvStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark, null));
+            } else if (today < trip.getStartDateInMillis()) {
+                tvStatus.setText("Zaplanowany");
+                tvStatus.setTextColor(getResources().getColor(R.color.primary, null));
+            } else {
+                tvStatus.setText("Zakończony");
+                tvStatus.setTextColor(getResources().getColor(R.color.text_secondary, null));
+            }
+
+            itemView.setOnClickListener(v -> {
+                viewModel.selectTrip(trip.getId());
+                dialog.dismiss();
+            });
+
+            btnDelete.setOnClickListener(v -> {
+                viewModel.deleteTrip(trip.getId());
+                dialog.dismiss();
+                showHistoryDialog();
+            });
+
+            container.addView(itemView);
         }
     }
 }
