@@ -14,17 +14,13 @@ public final class RetrofitClient {
     public static final String RESTCOUNTRIES_BASE_URL = "https://restcountries.com/";
     public static final String WIKIPEDIA_BASE_URL = "https://pl.wikipedia.org/";
     public static final String PIXABAY_BASE_URL = "https://pixabay.com/";
-    public static final String GROQ_BASE_URL = "https://api.groq.com/openai/v1/";
-
-    public static final String PIXABAY_API_KEY = "YOUR_API_KEY_HERE";
-    public static final String GROQ_API_KEY = "YOUR_GROQ_API_KEY_HERE";
+    public static final String PIXABAY_API_KEY = "57592526-c55db115b2194b9807e9ccd78";
 
     private static final Retrofit NOMINATIM;
     private static final Retrofit OPEN_METEO;
     private static final Retrofit REST_COUNTRIES;
     private static final Retrofit WIKIPEDIA;
     private static final Retrofit PIXABAY;
-    private static final Retrofit GROQ;
 
     static {
         OkHttpClient httpClient = new OkHttpClient.Builder()
@@ -69,12 +65,6 @@ public final class RetrofitClient {
                 .client(httpClient)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
-
-        GROQ = new Retrofit.Builder()
-                .baseUrl(GROQ_BASE_URL)
-                .client(httpClient)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
     }
 
     public static GeocodingApi geocoding() {
@@ -95,10 +85,6 @@ public final class RetrofitClient {
 
     public static PixabayApi pixabay() {
         return PIXABAY.create(PixabayApi.class);
-    }
-
-    public static AiPackingApi ai() {
-        return GROQ.create(AiPackingApi.class);
     }
 
     private RetrofitClient() { /* no instances */ }
