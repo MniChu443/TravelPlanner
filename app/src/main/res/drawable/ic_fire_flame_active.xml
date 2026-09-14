@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Outer Flame Glow -->
+    <path
+        android:fillColor="#FF3D00"
+        android:pathData="M50,4 C50,4 82,30 82,60 C82,78 68,92 50,92 C32,92 18,78 18,60 C18,30 50,4 50,4 Z" />
+
+    <!-- Middle Bright Flame -->
+    <path
+        android:fillColor="#FF9100"
+        android:pathData="M50,18 C50,20 70,38 70,62 C70,75 61,85 50,85 C39,85 30,75 30,62 C30,38 50,20 50,18 Z" />
+
+    <!-- Inner Yellow Flame Core -->
+    <path
+        android:fillColor="#FFEA00"
+        android:pathData="M50,32 C50,36 60,48 60,65 C60,72 55,78 50,78 C45,78 40,72 40,65 C40,48 50,36 50,32 Z" />
+</vector>

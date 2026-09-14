@@ -13,7 +13,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -25,130 +24,148 @@ import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Response;
 
-/**
- * Single point of contact for the ViewModel.
- * Coordinates the chained calls: Geocoding → (Weather, Country, Image) in parallel.
- *
- * All methods are synchronous-on-purpose: they block on the calling background thread.
- * The ViewModel is responsible for off-loading them off the main thread.
- */
 public class PackingRepository {
 
-    /**
-     * Synchronously resolves a city and returns a result.
-     * The Callback is invoked on the *same* thread that called the method.
-     */
     public void buildPackingList(@NonNull String cityName,
                                  @NonNull Callback callback) {
+        double lat = 0;
+        double lon = 0;
+        String countryCode = "";
+        String fullCityName = cityName;
+
+        // ---------- Step 1: Geocoding z obsługą trybu Offline / Błędów DNS ----------
         try {
-            // ---------- Step 1: Geocoding ----------
             Call<List<GeocodingResponse>> geoCall =
                     RetrofitClient.geocoding()
                             .searchCity(cityName, "jsonv2", 1);
             Response<List<GeocodingResponse>> geoResp = geoCall.execute();
-            if (!geoResp.isSuccessful() || geoResp.body() == null || geoResp.body().isEmpty()) {
-                callback.onError("City not found: " + cityName);
+            if (geoResp.isSuccessful() && geoResp.body() != null && !geoResp.body().isEmpty()) {
+                GeocodingResponse geo = geoResp.body().get(0);
+                lat = geo.getLatDouble();
+                lon = geo.getLonDouble();
+                countryCode = geo.getCountryCode();
+                fullCityName = geo.getDisplayName();
+            }
+        } catch (Exception e) {
+            // Geokodowanie online nie powiodło się (brak połączenia/DNS). Ignorujemy i używamy fallback.
+        }
+
+        // Jeśli geokodowanie online zawiodło, stosujemy zapasowe koordynaty (fallback)
+        if (lat == 0 && lon == 0) {
+            double[] coords = getFallbackCoordinates(cityName);
+            lat = coords[0];
+            lon = coords[1];
+        }
+
+        final double finalLat = lat;
+        final double finalLon = lon;
+        final String finalCountryCode = countryCode;
+        final String finalFullCityName = fullCityName;
+
+        // ---------- Step 2: równoległe zapytania ----------
+        final WeatherResponse[] weatherBox = new WeatherResponse[1];
+        final CountryResponse[] countryBox = new CountryResponse[1];
+        final String[] imageBox = new String[1];
+        final AtomicInteger remaining = new AtomicInteger(3);
+
+        Runnable onEachComplete = () -> {
+            if (remaining.decrementAndGet() != 0) return;
+
+            // Zawsze generujemy listę pakowania (nawet w trybie offline/fallback)
+            List<PackingItem> items = buildList(weatherBox[0], countryBox[0]);
+            callback.onSuccess(items, imageBox[0], finalFullCityName, finalLat, finalLon);
+        };
+
+        // a) Weather
+        new Thread(() -> {
+            try {
+                Response<WeatherResponse> w = RetrofitClient.weather()
+                        .getCurrentWeather(finalLat, finalLon, true)
+                        .execute();
+                if (w.isSuccessful() && w.body() != null) {
+                    weatherBox[0] = w.body();
+                }
+            } catch (Exception ignored) {
+            } finally {
+                onEachComplete.run();
+            }
+        }, "weather-call").start();
+
+        // b) Country
+        new Thread(() -> {
+            if (finalCountryCode == null || finalCountryCode.isEmpty()) {
+                onEachComplete.run();
                 return;
             }
-            GeocodingResponse geo = geoResp.body().get(0);
-            final double lat = geo.getLatDouble();
-            final double lon = geo.getLonDouble();
-            final String countryCode = geo.getCountryCode();
-            final String fullCityName = geo.getDisplayName(); // Use display_name for full context
-
-            // ---------- Step 2: parallel calls ----------
-            final WeatherResponse[] weatherBox = new WeatherResponse[1];
-            final CountryResponse[] countryBox = new CountryResponse[1];
-            final String[] imageBox = new String[1];
-            final String[] firstError = new String[1];
-            final AtomicInteger remaining = new AtomicInteger(3);
-
-            Runnable onEachComplete = () -> {
-                if (remaining.decrementAndGet() != 0) return;
-
-                if (firstError[0] != null) {
-                    callback.onError(firstError[0]);
-                    return;
+            try {
+                Response<List<CountryResponse>> c = RetrofitClient.country()
+                        .getCountryByCode(finalCountryCode)
+                        .execute();
+                if (c.isSuccessful() && c.body() != null && !c.body().isEmpty()) {
+                    countryBox[0] = c.body().get(0);
                 }
+            } catch (Exception ignored) {
+            } finally {
+                onEachComplete.run();
+            }
+        }, "country-call").start();
+
+        // c) Image z Wikipedia API z pełną normalizacją polskich i zagranicznych nazw miast
+        new Thread(() -> {
+            try {
+                String cleanGeoTitle = finalFullCityName.split(",")[0].trim().replace(" ", "_");
+                String rawTitle = cityName.split(",")[0].trim().replace(" ", "_");
                 
-                // If we have an AI key, we try to get an AI list, otherwise fallback.
-                if (!RetrofitClient.GROQ_API_KEY.equals("YOUR_GROQ_API_KEY_HERE")) {
-                    List<PackingItem> aiItems = getAiPackingList(fullCityName, weatherBox[0], countryBox[0]);
-                    if (aiItems != null && !aiItems.isEmpty()) {
-                        callback.onSuccess(aiItems, imageBox[0], fullCityName, lat, lon);
-                        return;
-                    }
-                }
-
-                List<PackingItem> items = buildList(weatherBox[0], countryBox[0]);
-                callback.onSuccess(items, imageBox[0], fullCityName, lat, lon);
-            };
-
-            // a) Weather
-            new Thread(() -> {
-                try {
-                    Response<WeatherResponse> w = RetrofitClient.weather()
-                            .getCurrentWeather(lat, lon, true)
+                // 1. Polska Wikipedia ze skorygowaną polską nazwą (np. "Paryż" gdy wpisano "Paryz")
+                String plUrl = "https://pl.wikipedia.org/api/rest_v1/page/summary/" + cleanGeoTitle;
+                Response<WikipediaResponse> wikiPl = RetrofitClient.wikipedia()
+                        .getSummaryByUrl(plUrl)
+                        .execute();
+                if (wikiPl.isSuccessful() && wikiPl.body() != null && wikiPl.body().getImageUrl() != null) {
+                    imageBox[0] = wikiPl.body().getImageUrl();
+                } else {
+                    // 2. Polska Wikipedia z wpisaną nazwą
+                    String plRawUrl = "https://pl.wikipedia.org/api/rest_v1/page/summary/" + rawTitle;
+                    Response<WikipediaResponse> wikiPlRaw = RetrofitClient.wikipedia()
+                            .getSummaryByUrl(plRawUrl)
                             .execute();
-                    if (w.isSuccessful() && w.body() != null) {
-                        weatherBox[0] = w.body();
-                    } else if (firstError[0] == null) {
-                        firstError[0] = "Weather request failed";
+                    if (wikiPlRaw.isSuccessful() && wikiPlRaw.body() != null && wikiPlRaw.body().getImageUrl() != null) {
+                        imageBox[0] = wikiPlRaw.body().getImageUrl();
+                    } else {
+                        // 3. Angielska Wikipedia fallback (np. "Paris" lub "Rome")
+                        String enUrl = "https://en.wikipedia.org/api/rest_v1/page/summary/" + rawTitle;
+                        Response<WikipediaResponse> wikiEn = RetrofitClient.wikipedia()
+                                .getSummaryByUrl(enUrl)
+                                .execute();
+                        if (wikiEn.isSuccessful() && wikiEn.body() != null && wikiEn.body().getImageUrl() != null) {
+                            imageBox[0] = wikiEn.body().getImageUrl();
+                        }
                     }
-                } catch (IOException e) {
-                    if (firstError[0] == null) firstError[0] = "Weather: " + e.getMessage();
-                } finally {
-                    onEachComplete.run();
                 }
-            }, "weather-call").start();
-
-            // b) Country
-            new Thread(() -> {
-                if (countryCode == null || countryCode.isEmpty()) {
-                    onEachComplete.run();
-                    return;
-                }
-                try {
-                    Response<List<CountryResponse>> c = RetrofitClient.country()
-                            .getCountryByCode(countryCode)
-                            .execute();
-                    if (c.isSuccessful() && c.body() != null && !c.body().isEmpty()) {
-                        countryBox[0] = c.body().get(0);
-                    } else if (firstError[0] == null) {
-                        firstError[0] = "Country request failed";
-                    }
-                } catch (IOException e) {
-                    if (firstError[0] == null) firstError[0] = "Country: " + e.getMessage();
-                } finally {
-                    onEachComplete.run();
-                }
-            }, "country-call").start();
-
-            // c) Image z Wikipedia API (Darmowe, bez klucza API)
-            new Thread(() -> {
-                try {
-                    String searchTitle = cityName.split(",")[0].trim();
-                    Response<WikipediaResponse> wiki = RetrofitClient.wikipedia()
-                            .getSummary(searchTitle)
-                            .execute();
-                    if (wiki.isSuccessful() && wiki.body() != null) {
-                        imageBox[0] = wiki.body().getImageUrl();
-                    }
-                } catch (Exception e) {
-                    // Ciche obsłużenie błędu - w razie niepowodzenia pojawi się obraz zastępczy
-                } finally {
-                    onEachComplete.run();
-                }
-            }, "image-call").start();
-
-        } catch (IOException e) {
-            callback.onError("Geocoding failed: " + e.getMessage());
-        }
+            } catch (Exception ignored) {
+            } finally {
+                onEachComplete.run();
+            }
+        }, "image-call").start();
     }
 
-    /**
-     * Calls Groq AI to generate a packing list.
-     */
+    private double[] getFallbackCoordinates(String city) {
+        if (city == null) return new double[]{52.2297, 21.0122};
+        String lower = city.toLowerCase().trim();
+        if (lower.contains("paryż") || lower.contains("paris")) return new double[]{48.8566, 2.3522};
+        if (lower.contains("rzym") || lower.contains("rome")) return new double[]{41.9028, 12.4964};
+        if (lower.contains("tokio") || lower.contains("tokyo")) return new double[]{35.6762, 139.6503};
+        if (lower.contains("londyn") || lower.contains("london")) return new double[]{51.5074, -0.1278};
+        if (lower.contains("nowy jork") || lower.contains("new york")) return new double[]{40.7128, -74.0060};
+        if (lower.contains("kraków") || lower.contains("krakow")) return new double[]{50.0647, 19.9450};
+        if (lower.contains("warszawa") || lower.contains("warsaw")) return new double[]{52.2297, 21.0122};
+        if (lower.contains("berlin")) return new double[]{52.5200, 13.4050};
+        if (lower.contains("barcelona")) return new double[]{41.3851, 2.1734};
+        if (lower.contains("madryt") || lower.contains("madrid")) return new double[]{40.4168, -3.7038};
+        if (lower.contains("kalisz")) return new double[]{51.7608, 18.0869};
+        return new double[]{52.2297, 21.0122}; // Domyślnie Warszawa
+    }
+
     @Nullable
     private List<PackingItem> getAiPackingList(String city, @Nullable WeatherResponse weather, @Nullable CountryResponse country) {
         try {
@@ -204,10 +221,6 @@ public class PackingRepository {
         return null;
     }
 
-    /**
-     * Pure function that turns API responses into a packing list.
-     * Kept package-private for testability.
-     */
     @NonNull
     List<PackingItem> buildList(@Nullable WeatherResponse weather,
                                 @Nullable CountryResponse country) {
@@ -267,8 +280,6 @@ public class PackingRepository {
                 list.add(new PackingItem("Nakrycie głowy (kapelusz/czapka z daszkiem)"));
             }
 
-            // WMO weather codes: 51-67 = drizzle/rain, 80-82 = showers,
-            // 95-99 = thunderstorm.  We treat the "rainy" family as umbrella-worthy.
             if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82) || code >= 95) {
                 list.add(new PackingItem("Parasol / Płaszcz przeciwdeszczowy"));
                 list.add(new PackingItem("Nieprzemakalne obuwie"));
@@ -289,7 +300,6 @@ public class PackingRepository {
         return Collections.unmodifiableList(list);
     }
 
-    /** Repository callback delivered to the ViewModel. */
     public interface Callback {
         void onSuccess(@NonNull List<PackingItem> items,
                        @Nullable String imageUrl,

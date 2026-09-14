@@ -20,12 +20,8 @@ public class PackingViewModel extends ViewModel {
     private final PackingRepository repository = new PackingRepository();
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
-    // The currently active screen state (for PackingFragment)
     private final MutableLiveData<PackingState> state = new MutableLiveData<>();
-    
-    // Master list of all user trips
     private final MutableLiveData<List<Trip>> myTrips = new MutableLiveData<>(new ArrayList<>());
-    
     private final MutableLiveData<Boolean> navigateToPackingEvent = new MutableLiveData<>(false);
 
     public LiveData<PackingState> getState() {
@@ -44,7 +40,7 @@ public class PackingViewModel extends ViewModel {
         navigateToPackingEvent.setValue(false);
     }
 
-    public void generatePackingList(@NonNull String cityName, long dateInMillis) {
+    public void generatePackingList(@NonNull String cityName, long startDateInMillis, long endDateInMillis) {
         if (cityName.trim().isEmpty()) {
             state.setValue(PackingState.error("Please enter a city name."));
             return;
@@ -61,18 +57,15 @@ public class PackingViewModel extends ViewModel {
                                       double lat,
                                       double lon) {
                     
-                    // Create new Trip
-                    Trip trip = new Trip(city, dateInMillis, items, imageUrl, lat, lon);
+                    Trip trip = new Trip(city, startDateInMillis, endDateInMillis, items, imageUrl, lat, lon);
                     
-                    // Add to master list
                     List<Trip> currentTrips = myTrips.getValue();
                     if (currentTrips == null) currentTrips = new ArrayList<>();
                     List<Trip> updatedTrips = new ArrayList<>(currentTrips);
-                    updatedTrips.add(0, trip); // Add to top
+                    updatedTrips.add(0, trip);
                     myTrips.postValue(updatedTrips);
 
-                    // Set as active state
-                    state.postValue(PackingState.success(items, imageUrl, city, lat, lon, trip.getId(), dateInMillis));
+                    state.postValue(PackingState.success(items, imageUrl, city, lat, lon, trip.getId(), startDateInMillis, endDateInMillis));
                     navigateToPackingEvent.postValue(true);
                 }
 
@@ -96,7 +89,8 @@ public class PackingViewModel extends ViewModel {
                         trip.getLat(),
                         trip.getLon(),
                         trip.getId(),
-                        trip.getDateInMillis()
+                        trip.getStartDateInMillis(),
+                        trip.getEndDateInMillis()
                 ));
                 navigateToPackingEvent.setValue(true);
                 break;
@@ -113,7 +107,7 @@ public class PackingViewModel extends ViewModel {
         item.setPacked(!item.isPacked());
 
         updateCurrentTripItems(current.items);
-        state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.tripDateInMillis));
+        state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.startDateInMillis, current.endDateInMillis));
     }
 
     public void addCustomItem(@NonNull String itemName) {
@@ -124,7 +118,7 @@ public class PackingViewModel extends ViewModel {
         newItems.add(0, new PackingItem(itemName));
 
         updateCurrentTripItems(newItems);
-        state.setValue(PackingState.success(newItems, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.tripDateInMillis));
+        state.setValue(PackingState.success(newItems, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.startDateInMillis, current.endDateInMillis));
     }
     
     private void updateCurrentTripItems(List<PackingItem> updatedItems) {
@@ -155,7 +149,7 @@ public class PackingViewModel extends ViewModel {
     public void clearError() {
         PackingState current = state.getValue();
         if (current != null && current.errorMessage != null) {
-            state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.tripDateInMillis));
+            state.setValue(PackingState.success(current.items, current.imageUrl, current.cityName, current.lat, current.lon, current.tripId, current.startDateInMillis, current.endDateInMillis));
         }
     }
 

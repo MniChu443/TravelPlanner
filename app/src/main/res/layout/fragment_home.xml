@@ -34,7 +34,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tvWelcome" />
 
-        <!-- KARTA 0: Wyszukiwarka (Zachowana z oryginału) -->
+        <!-- KARTA 0: Wyszukiwarka -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/searchCard"
             android:layout_width="match_parent"
@@ -72,22 +72,22 @@
                         android:maxLines="1" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <TextView
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/tvSelectedDate"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="60dp"
                     android:layout_marginTop="16dp"
-                    android:background="@drawable/gradient_overlay"
-                    android:padding="12dp"
-                    android:text="Data wyjazdu: Niewybrana"
+                    android:text="Wybierz termin wyjazdu"
                     android:textColor="@color/primary"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    app:drawableStartCompat="@android:drawable/ic_menu_today"
-                    app:drawableTint="@color/primary"
-                    android:drawablePadding="12dp"
-                    android:clickable="true"
-                    android:focusable="true"/>
+                    app:cornerRadius="12dp"
+                    app:icon="@android:drawable/ic_menu_today"
+                    app:iconGravity="textStart"
+                    app:iconTint="@color/primary"
+                    app:strokeColor="@color/divider"
+                    app:strokeWidth="1dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSearch"
@@ -139,7 +139,7 @@
                     android:textSize="14sp"
                     android:layout_marginBottom="8dp"/>
 
-                <!-- Stan wizualny: drewno vs ognisko -->
+                <!-- Stan wizualny: drewno vs ognisko z licznikiem cyfrowym -->
                 <FrameLayout
                     android:layout_width="120dp"
                     android:layout_height="120dp"
@@ -152,12 +152,35 @@
                         android:src="@drawable/ic_firewood"
                         android:visibility="visible" />
 
+                    <ImageView
+                        android:id="@+id/img_fire_active"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ic_fire_flame_active"
+                        android:visibility="gone" />
+
                     <com.airbnb.lottie.LottieAnimationView
                         android:id="@+id/lottie_campfire_active"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         app:lottie_fileName="campfire.json"
                         app:lottie_loop="true"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tv_fire_counter"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginBottom="2dp"
+                        android:textColor="@color/white"
+                        android:textSize="32sp"
+                        android:textStyle="bold"
+                        android:shadowColor="#CC000000"
+                        android:shadowDx="2"
+                        android:shadowDy="2"
+                        android:shadowRadius="6"
+                        tools:text="9"
                         android:visibility="gone" />
                 </FrameLayout>
 

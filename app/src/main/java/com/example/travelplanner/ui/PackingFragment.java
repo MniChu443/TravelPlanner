@@ -133,13 +133,18 @@ public class PackingFragment extends Fragment {
             }
             tvCityName.setText(shortCity);
             
-            if (state.tripDateInMillis > 0) {
-                long diff = state.tripDateInMillis - System.currentTimeMillis();
-                int days = (int) (diff / (1000 * 60 * 60 * 24));
-                if (days <= 0) {
-                    tvTripCountdown.setText("Jesteś w trakcie wyjazdu!");
+            if (state.startDateInMillis > 0 && state.endDateInMillis > 0) {
+                long today = System.currentTimeMillis();
+                if (today >= state.startDateInMillis && today <= state.endDateInMillis) {
+                    long remainingDiff = state.endDateInMillis - today;
+                    int daysRemaining = (int) (remainingDiff / (1000 * 60 * 60 * 24)) + 1;
+                    tvTripCountdown.setText("Wyjazd trwa! Do końca: " + daysRemaining + " dni");
+                } else if (today < state.startDateInMillis) {
+                    long untilStartDiff = state.startDateInMillis - today;
+                    int daysUntil = (int) (untilStartDiff / (1000 * 60 * 60 * 24)) + 1;
+                    tvTripCountdown.setText("Dni do wyjazdu: " + daysUntil);
                 } else {
-                    tvTripCountdown.setText("Pozostało dni: " + days);
+                    tvTripCountdown.setText("Wyjazd zakończony");
                 }
                 tvTripCountdown.setVisibility(View.VISIBLE);
             } else {
@@ -156,8 +161,15 @@ public class PackingFragment extends Fragment {
             }
 
             if (state.imageUrl != null && !state.imageUrl.isEmpty()) {
+                com.bumptech.glide.load.model.GlideUrl glideUrl = new com.bumptech.glide.load.model.GlideUrl(
+                        state.imageUrl,
+                        new com.bumptech.glide.load.model.LazyHeaders.Builder()
+                                .addHeader("User-Agent", "TravelPlannerApp/1.0 (android-app-support@travelplanner.com)")
+                                .build()
+                );
+
                 Glide.with(this)
-                        .load(state.imageUrl)
+                        .load(glideUrl)
                         .placeholder(R.drawable.ic_city_placeholder)
                         .error(R.drawable.ic_city_placeholder)
                         .centerCrop()

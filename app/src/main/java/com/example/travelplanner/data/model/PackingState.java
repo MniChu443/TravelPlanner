@@ -17,7 +17,8 @@ public class PackingState {
     public final double lat;
     public final double lon;
     public final String tripId;
-    public final long tripDateInMillis;
+    public final long startDateInMillis;
+    public final long endDateInMillis;
 
     private PackingState(boolean loading,
                          List<PackingItem> items,
@@ -27,7 +28,8 @@ public class PackingState {
                          double lat,
                          double lon,
                          String tripId,
-                         long tripDateInMillis) {
+                         long startDateInMillis,
+                         long endDateInMillis) {
         this.loading = loading;
         this.items = items == null ? Collections.emptyList() : items;
         this.imageUrl = imageUrl;
@@ -36,11 +38,12 @@ public class PackingState {
         this.lat = lat;
         this.lon = lon;
         this.tripId = tripId;
-        this.tripDateInMillis = tripDateInMillis;
+        this.startDateInMillis = startDateInMillis;
+        this.endDateInMillis = endDateInMillis;
     }
 
     public static PackingState loading() {
-        return new PackingState(true, null, null, null, null, 0, 0, null, 0);
+        return new PackingState(true, null, null, null, null, 0, 0, null, 0, 0);
     }
 
     public static PackingState success(List<PackingItem> items,
@@ -49,15 +52,16 @@ public class PackingState {
                                       double lat,
                                       double lon,
                                       String tripId,
-                                      long tripDateInMillis) {
-        return new PackingState(false, items, imageUrl, null, cityName, lat, lon, tripId, tripDateInMillis);
+                                      long startDateInMillis,
+                                      long endDateInMillis) {
+        return new PackingState(false, items, imageUrl, null, cityName, lat, lon, tripId, startDateInMillis, endDateInMillis);
     }
 
     public static PackingState error(String message) {
-        return new PackingState(false, Collections.emptyList(), null, message, null, 0, 0, null, 0);
+        return new PackingState(false, Collections.emptyList(), null, message, null, 0, 0, null, 0, 0);
     }
 
     public static PackingState idle() {
-        return new PackingState(false, null, null, null, null, 0, 0, null, 0);
+        return new PackingState(false, null, null, null, null, 0, 0, null, 0, 0);
     }
 }

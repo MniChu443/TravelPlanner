@@ -22,15 +22,6 @@ public class MainActivity extends AppCompatActivity {
             NavController navController = navHostFragment.getNavController();
             BottomNavigationView navView = findViewById(R.id.nav_view);
             NavigationUI.setupWithNavController(navView, navController);
-
-            // Ensure back button works for fragments
-            navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
-                if (destination.getId() == R.id.navigation_home) {
-                    com.example.travelplanner.ui.PackingViewModel viewModel = 
-                        new androidx.lifecycle.ViewModelProvider(this).get(com.example.travelplanner.ui.PackingViewModel.class);
-                    viewModel.resetToIdle();
-                }
-            });
         }
     }
 

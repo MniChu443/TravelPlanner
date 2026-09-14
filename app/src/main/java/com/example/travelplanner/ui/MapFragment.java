@@ -181,7 +181,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                             Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
                             // Tymczasowo generujemy na dzisiaj (albo wywolujemy nawigacje do HOME)
                             // Najlepiej wrocic do Home, bo tam trzeba wybrac date. Zrobmy to tak:
-                            viewModel.generatePackingList(selectedCity, System.currentTimeMillis());
+                            long today = System.currentTimeMillis();
+                            long tomorrow = today + (7L * 24 * 60 * 60 * 1000);
+                            viewModel.generatePackingList(selectedCity, today, tomorrow);
                             
                             // Switch to Packing List tab
                             com.google.android.material.bottomnavigation.BottomNavigationView navView = 

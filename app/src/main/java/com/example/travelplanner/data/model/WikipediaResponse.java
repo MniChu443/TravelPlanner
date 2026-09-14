@@ -10,11 +10,12 @@ public class WikipediaResponse {
     private ImageInfo thumbnail;
 
     public String getImageUrl() {
-        if (originalImage != null && originalImage.source != null) {
-            return originalImage.source;
-        }
         if (thumbnail != null && thumbnail.source != null) {
-            return thumbnail.source;
+            // Ładujemy szybką i lekką miniaturę HD zamiast kilkudysięciomegabitowego pliku źródłowego
+            return thumbnail.source.replace("/330px-", "/1000px-");
+        }
+        if (originalImage != null && originalImage.source != null && !originalImage.source.toLowerCase().endsWith(".svg")) {
+            return originalImage.source;
         }
         return null;
     }

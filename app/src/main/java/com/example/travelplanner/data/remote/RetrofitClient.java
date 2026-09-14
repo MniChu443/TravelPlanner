@@ -7,13 +7,8 @@ import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
-/**
- * Holds the three Retrofit instances and one inner class for Pixabay.
- * Singleton – one OkHttp client is shared for connection pooling.
- */
 public final class RetrofitClient {
 
-    // Base URLs for the free, key-less APIs.
     public static final String NOMINATIM_BASE_URL = "https://nominatim.openstreetmap.org/";
     public static final String OPEN_METEO_BASE_URL = "https://api.open-meteo.com/";
     public static final String RESTCOUNTRIES_BASE_URL = "https://restcountries.com/";
@@ -21,18 +16,7 @@ public final class RetrofitClient {
     public static final String PIXABAY_BASE_URL = "https://pixabay.com/";
     public static final String GROQ_BASE_URL = "https://api.groq.com/openai/v1/";
 
-    /**
-     * 👉 Replace this with your own free Pixabay key from
-     *    https://pixabay.com/api/docs/ before running the app.
-     *    Without a real key, the image call will fail and the header
-     *    ImageView will fall back to the placeholder drawable.
-     */
     public static final String PIXABAY_API_KEY = "YOUR_API_KEY_HERE";
-
-    /**
-     * 👉 Replace this with your own free Groq API key from
-     *    https://console.groq.com/
-     */
     public static final String GROQ_API_KEY = "YOUR_GROQ_API_KEY_HERE";
 
     private static final Retrofit NOMINATIM;
@@ -44,11 +28,11 @@ public final class RetrofitClient {
 
     static {
         OkHttpClient httpClient = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(15, TimeUnit.SECONDS)
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
                 .addInterceptor(chain -> chain.proceed(
                         chain.request().newBuilder()
-                                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                                .header("User-Agent", "TravelPlannerApp/1.0 (android-app-support@travelplanner.com)")
                                 .header("Referer", "https://www.openstreetmap.org/")
                                 .build()
                 ))
