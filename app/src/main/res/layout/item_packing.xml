@@ -18,11 +18,14 @@
         android:orientation="horizontal"
         android:padding="16dp">
 
-        <com.google.android.material.checkbox.MaterialCheckBox
+        <CheckBox
             android:id="@+id/cbItem"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:buttonTint="@color/primary" />
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:button="@drawable/selector_checkbox"
+            android:buttonTint="@null"
+            app:buttonTint="@null"
+            android:background="?attr/selectableItemBackgroundBorderless" />
 
         <TextView
             android:id="@+id/tvItemName"
