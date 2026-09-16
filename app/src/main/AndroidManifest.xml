@@ -22,8 +22,7 @@
 
         <!-- Karta Google Maps wymaga podanego klucza API, bez niego aplikacja crashuje -->
         <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBkyyOucSt5Ovwh4E8d1stlDpjKvfrP3dA" />
+            android:name="com.google.android.geo.API_" />
 
         <activity
             android:name=".MainActivity"
