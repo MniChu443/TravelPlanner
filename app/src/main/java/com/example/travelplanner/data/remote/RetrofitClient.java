@@ -14,7 +14,7 @@ public final class RetrofitClient {
     public static final String RESTCOUNTRIES_BASE_URL = "https://restcountries.com/";
     public static final String WIKIPEDIA_BASE_URL = "https://pl.wikipedia.org/";
     public static final String PIXABAY_BASE_URL = "https://pixabay.com/";
-    public static final String PIXABAY_API_KEY = "57592526-c55db115b2194b9807e9ccd78";
+    public static final String PIXABAY_API_KEY = "57592526-c55db115b21";
 
     private static final Retrofit NOMINATIM;
     private static final Retrofit OPEN_METEO;
